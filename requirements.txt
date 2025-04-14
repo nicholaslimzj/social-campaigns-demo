@@ -22,3 +22,6 @@ tqdm~=4.67.0
 # Development and notebook support
 ipykernel~=6.29.0
 jupyterlab~=4.4.0
+
+# Data transformation
+dbt-duckdb~=1.9.0

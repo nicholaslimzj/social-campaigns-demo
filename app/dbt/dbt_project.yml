@@ -1,0 +1,25 @@
+name: 'meta_demo'
+version: '1.0.0'
+config-version: 2
+
+profile: 'meta_demo'
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Global configurations
+on-run-start:
+  - "SET enable_object_cache=true;"
+
+models:
+  meta_demo:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table

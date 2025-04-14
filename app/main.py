@@ -127,28 +127,40 @@ def start_server(port=8080):
     return True
 
 
-def initialize_duckdb():
+def run_dbt_models():
     """
-    Initialize DuckDB with views and tables.
+    Run dbt models to create views and tables in DuckDB.
     """
-    logger.info("Initializing DuckDB...")
+    logger.info("Running dbt models...")
     
     if not check_environment():
         return False
     
     try:
-        # Import and run DuckDB initialization
-        from app.scripts.duckdb_manager import initialize_duckdb as init_db
-        result = init_db()
+        # Run dbt from the command line
+        import subprocess
         
-        if result:
-            logger.info("DuckDB initialization completed successfully")
+        # Change to the dbt directory
+        dbt_dir = Path('/app/dbt')
+        
+        # Run dbt
+        result = subprocess.run(
+            ['dbt', 'run'],
+            cwd=str(dbt_dir),
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode == 0:
+            logger.info("dbt models executed successfully")
+            logger.info(result.stdout)
+            return True
         else:
-            logger.error("DuckDB initialization failed")
-        
-        return result
-    except ImportError:
-        logger.error("DuckDB manager module not found")
+            logger.error("dbt execution failed")
+            logger.error(result.stderr)
+            return False
+    except Exception as e:
+        logger.error(f"Error running dbt models: {e}")
         return False
 
 
@@ -168,15 +180,15 @@ def main():
         check_environment()
     elif command == "process":
         process_data()
-    elif command == "duckdb":
-        initialize_duckdb()
+    elif command == "dbt":
+        run_dbt_models()
     elif command == "dashboard":
         start_dashboard()
     elif command == "serve":
         start_server()
     else:
         logger.error(f"Unknown command: {command}")
-        logger.info("Available commands: check, process, duckdb, dashboard, serve")
+        logger.info("Available commands: check, process, dbt, dashboard, serve")
     
     logger.info("Meta Demo application completed")
 

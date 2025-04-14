@@ -42,6 +42,11 @@ ENV/
 *.duckdb
 *.duckdb.wal
 
+# dbt files
+/app/dbt/target/
+/app/dbt/logs/
+/app/dbt/dbt_packages/
+
 # Logs
 *.log
 

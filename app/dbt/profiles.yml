@@ -1,0 +1,8 @@
+meta_demo:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: '/data/db/meta_analytics.duckdb'
+      extensions:
+        - httpfs

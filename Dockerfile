@@ -17,6 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/
+ENV DBT_PROFILES_DIR=/app/dbt
 
 # Copy the entrypoint script
 COPY entrypoint.sh /entrypoint.sh

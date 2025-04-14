@@ -8,6 +8,7 @@ This module handles the integration with DuckDB for analytics.
 
 import os
 import logging
+import subprocess
 from pathlib import Path
 from typing import Dict, List, Any, Union, Optional
 
@@ -174,10 +175,13 @@ class DuckDBManager:
         result = self.execute(query)
         return result.fetchdf()
     
-    def create_campaign_view(self) -> bool:
+    def run_dbt(self, models: Optional[List[str]] = None) -> bool:
         """
-        Create a view of all campaign data from parquet files.
+        Run dbt models to create views and tables.
         
+        Args:
+            models (List[str], optional): Specific models to run. Defaults to None (all models).
+            
         Returns:
             bool: True if successful, False otherwise
         """
@@ -187,22 +191,30 @@ class DuckDBManager:
                 logger.error(f"Processed directory not found: {PROCESSED_DIR}")
                 return False
             
-            # Create a view of all parquet files with derived metrics
-            # Create the view using the stored data root path
-            query = f"""
-            CREATE OR REPLACE VIEW campaigns AS
-            SELECT 
-                {SQL_FRAGMENTS['base_columns']},
-                -- Add derived metrics
-                {SQL_FRAGMENTS['derived_metrics']}
-            FROM read_parquet(DATA_ROOT() || '/processed/*/*/data.parquet');
-            """
+            # Set up environment variables for dbt
+            env = os.environ.copy()
+            env["DBT_PROFILES_DIR"] = str(Path(__file__).parent.parent / "dbt")
             
-            self.execute(query)
-            logger.info("Created campaigns view from parquet files")
+            # Build the dbt command
+            dbt_project_dir = Path(__file__).parent.parent / "dbt"
+            cmd = ["dbt", "run", "--project-dir", str(dbt_project_dir)]
+            
+            # Add specific models if provided
+            if models:
+                cmd.extend(["--select"] + models)
+            
+            # Run the dbt command
+            logger.info(f"Running dbt command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                logger.error(f"dbt command failed: {result.stderr}")
+                return False
+            
+            logger.info(f"dbt command succeeded: {result.stdout}")
             
             # Verify the view
-            count_query = "SELECT COUNT(*) FROM campaigns;"
+            count_query = "SELECT COUNT(*) FROM stg_campaigns;"
             count_result = self.query_to_df(count_query)
             count = count_result.iloc[0, 0]
             
@@ -210,8 +222,17 @@ class DuckDBManager:
             return True
             
         except Exception as e:
-            logger.error(f"Error creating campaigns view: {e}")
+            logger.error(f"Error running dbt: {e}")
             return False
+            
+    def create_campaign_view(self) -> bool:
+        """
+        Create a view of all campaign data from parquet files using dbt.
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        return self.run_dbt(["stg_campaigns"])
     
     def create_materialized_views(self) -> bool:
         """
@@ -404,7 +425,8 @@ def initialize_duckdb():
             db.create_campaign_view()
             
             # Create materialized views
-            db.create_materialized_views()
+            # Commented out to test just the campaign view
+            # db.create_materialized_views()
             
             # Test a query
             top_campaigns = db.get_top_performing_campaigns(limit=5)
