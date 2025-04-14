@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    volumes:
+      # Mount the code directory
+      - ./app:/app
+      # Mount data directories at the root level to match local structure
+      - ./data:/data
+      - ./dataset:/dataset
+      # Mount requirements and entrypoint files
+      - ./requirements.txt:/requirements.txt
+      - ./entrypoint.sh:/entrypoint.sh
+      # Create named volumes for dependency caching
+      - python-packages:/usr/local/lib/python3.10/site-packages
+      - pip-cache:/root/.cache/pip
+    environment:
+      - PYTHONPATH=/
+    ports:
+      # Expose ports for any web services we might add
+      - "8050:8050"  # For Dash/Plotly dashboard
+      - "8501:8501"  # For Streamlit (if used)
+    # Override the default command if needed during development
+    # command: python -m app.some_script
+    # Enable interactive terminal
+    stdin_open: true
+    tty: true
+
+  # Note: We're using DuckDB directly in our application code
+  # instead of as a separate service
+
+volumes:
+  python-packages:  # Persistent volume for Python packages
+  pip-cache:        # Persistent volume for pip cache
