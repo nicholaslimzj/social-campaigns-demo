@@ -24,4 +24,4 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Command to run when the container starts
-CMD ["/entrypoint.sh"]
+CMD exec gunicorn --reload --workers 1 --bind 0.0.0.0:5000 index:app

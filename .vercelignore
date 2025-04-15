@@ -1,0 +1,24 @@
+/dataset
+/docs
+/backup
+/data/db/copy_for_dbeaver.duckdb
+/data/db/*.wal
+
+# Ignore any artifacts or build files
+node_modules
+.git
+.github
+.gitignore
+README.md
+__pycache__/
+*.pyc
+/venv/
+/env/
+/tests/
+
+# Ignore any development files
+*.log
+.DS_Store
+.env
+.env.local
+.env.development

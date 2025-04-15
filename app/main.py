@@ -21,25 +21,35 @@ import logging
 from pathlib import Path
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
-# Load environment variables from .env file
-try:
-    from dotenv import load_dotenv
-    # Load .env file from app directory
-    env_path = Path(__file__).parent / '.env'
-    if env_path.exists():
-        load_dotenv(dotenv_path=env_path)
-        print(f"Loaded environment variables from {env_path}")
-    else:
-        print(f"No .env file found at {env_path}")
-except ImportError:
-    print("python-dotenv not installed, skipping .env loading")
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    
+    # Load from .env file in the project root
+    root_env_path = Path(__file__).parent.parent / '.env'
+    if root_env_path.exists():
+        load_dotenv(dotenv_path=root_env_path)
+        logger.info(f"Loaded environment variables from {root_env_path}")
+        
+    # Check for environment-specific .env files
+    env = os.environ.get('ENVIRONMENT', 'development')
+    env_specific_path = Path(__file__).parent.parent / f".env.{env}"
+    if env_specific_path.exists():
+        load_dotenv(dotenv_path=env_specific_path)
+        logger.info(f"Loaded environment-specific variables from {env_specific_path}")
+    
+    # Log if no environment files were found
+    if not (root_env_path.exists() or env_specific_path.exists()):
+        logger.warning("No .env files found in project root")
+except ImportError:
+    print("python-dotenv not installed, skipping .env loading")
 
 # Define paths
 # Check if we're running in a container
@@ -114,29 +124,55 @@ def start_dashboard():
         return False
 
 
-def start_server(port=8080):
+def start_server(args=None):
     """
-    Start a simple web server.
+    Start the API server for the Meta Demo project.
+    
+    Args:
+        args: Command line arguments (optional)
     """
-    logger.info(f"Starting web server on port {port}...")
+    from app.api import init_app
     
-    class CustomHandler(SimpleHTTPRequestHandler):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, directory=str(BASE_DIR), **kwargs)
-        
-        def log_message(self, format, *args):
-            logger.info(f"{self.client_address[0]} - {format % args}")
+    # Use the standard Flask port 5000 for Docker
+    port = int(os.environ.get('PORT', 5000))
+    logger.info(f"Using port {port} for the API server")
     
-    server_address = ('', port)
-    httpd = HTTPServer(server_address, CustomHandler)
+    logger.info(f"Starting Meta Demo API server on port {port}...")
     
-    logger.info(f"Server running at http://localhost:{port}/")
+    # Check if API key is available in environment
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        logger.warning("No Google API key found in environment. Vanna functionality will be limited.")
+    
+    # Log Vanna configuration from environment
+    model = os.environ.get("VANNA_MODEL", "gemini-2.5-pro-exp-03-25")
+    temp_str = os.environ.get("VANNA_TEMPERATURE", "0.2")
+    logger.info(f"Vanna configuration: model={model}, temperature={temp_str}")
+    
+    # Initialize the Flask app (it will read environment variables itself)
+    app = init_app()
+    
+    logger.info(f"API server running at http://localhost:{port}/")
+    logger.info("Available endpoints:")
+    logger.info("  /api/health - Health check")
+    logger.info("  /api/ask - Process natural language questions")
+    logger.info("  /api/kpis - Get KPIs for companies")
+    logger.info("  /api/insights - Get AI-generated insights")
+    logger.info("  /api/companies - Get list of companies")
     logger.info("Press Ctrl+C to stop the server")
     
     try:
-        httpd.serve_forever()
+        # Simple configuration - bind to all interfaces (0.0.0.0)
+        # This works for both local development and Docker
+        host = '0.0.0.0'
+        logger.info(f"Starting Flask server with host='{host}', accessible from all interfaces")
+        logger.info(f"You should be able to access the API at http://localhost:{port}/api/health")
+            
+        app.run(host=host, port=port)
     except KeyboardInterrupt:
         logger.info("Server stopped")
+    except Exception as e:
+        logger.error(f"Error starting server: {str(e)}")
     
     return True
 
@@ -265,6 +301,7 @@ def main():
     elif command == "dashboard":
         start_dashboard()
     elif command == "serve":
+        # Call start_server without arguments
         start_server()
     elif command == "vanna":
         if subcommand == "train":

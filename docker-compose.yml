@@ -12,15 +12,30 @@ services:
       # Mount requirements and entrypoint files
       - ./requirements.txt:/requirements.txt
       - ./entrypoint.sh:/entrypoint.sh
+      - ./index.py:/index.py
+      # Mount environment files
+      - ./.env:/.env
+      - ./.env.development:/.env.development
+      - ./.env.production:/.env.production
       # Create named volumes for dependency caching
       - python-packages:/usr/local/lib/python3.10/site-packages
       - pip-cache:/root/.cache/pip
     environment:
+      # Base configuration
       - PYTHONPATH=/
+      - ENVIRONMENT=development
+      
+      # Vanna configuration
+      - VANNA_MODEL=gemini-1.5-pro-002
+      - VANNA_TEMPERATURE=0.2
+      
+      # The API key should come from .env file for security
+      # - GOOGLE_API_KEY=your_api_key
     ports:
       # Expose ports for any web services we might add
       - "8050:8050"  # For Dash/Plotly dashboard
       - "8501:8501"  # For Streamlit (if used)
+      - "5000:5000"  # For Flask API server
     # Override the default command if needed during development
     # command: python -m app.some_script
     # Enable interactive terminal

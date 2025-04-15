@@ -15,13 +15,6 @@ In the Docker container, DuckDB is configured to use:
 - Processed data: `/data/processed`
 - Database file: `/data/db/meta_analytics.duckdb`
 
-### Local Windows Environment
-
-When using DuckDB locally on Windows, you need to override the data path:
-- Data root path: `c:/Users/wolve/code/meta-demo/data`
-- Processed data: `c:/Users/wolve/code/meta-demo/data/processed`
-- Database file: `c:/Users/wolve/code/meta-demo/data/db/meta_analytics.duckdb`
-
 ## Using DuckDB Client on Windows
 
 When accessing the database file created in the container from your local Windows environment, follow these steps:

@@ -29,6 +29,8 @@ var/
 venv/
 ENV/
 .env
+.env.development
+.env.production
 
 # IDE files
 .idea/
@@ -54,3 +56,4 @@ ENV/
 # OS specific
 .DS_Store
 Thumbs.db
+.vercel

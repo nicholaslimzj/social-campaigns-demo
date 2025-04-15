@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "index.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "index.py"
+    }
+  ],
+  "env": {
+    "PYTHONPATH": ".",
+    "VANNA_MODEL": "gemini-1.5-pro-002",
+    "VANNA_TEMPERATURE": "0.2",
+    "ENVIRONMENT": "production"
+  }
+}

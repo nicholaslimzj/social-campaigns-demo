@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Dataset and large files
+/dataset
+/docs
+/backup
+/data/db/copy_for_dbeaver.duckdb
+/data/db/*.wal
+
+# Docker
+docker-compose.yml
+.dockerignore
+
+# Git
+.git
+.github
+.gitignore
+
+# Misc
+*.log
+.DS_Store
+.env
+.env.local
+.env.development
+README.md

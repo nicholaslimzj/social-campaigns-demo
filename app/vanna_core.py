@@ -19,19 +19,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Check if we're running in a container
-if Path('/data').exists():
-    # Container environment
-    DATA_ROOT_PATH = '/data'
-    DBT_MODELS_PATH = '/app/dbt/models'
-    DBT_MACROS_PATH = '/app/dbt/macros'
-    DB_PATH = '/data/db/meta_analytics.duckdb'
-else:
-    # Local environment
-    DATA_ROOT_PATH = 'c:/Users/wolve/code/meta-demo/data'
-    DBT_MODELS_PATH = 'c:/Users/wolve/code/meta-demo/app/dbt/models'
-    DBT_MACROS_PATH = 'c:/Users/wolve/code/meta-demo/app/dbt/macros'
-    DB_PATH = 'c:/Users/wolve/code/meta-demo/data/db/meta_demo.duckdb'
+DATA_ROOT_PATH = '/data'
+DBT_MODELS_PATH = '/app/dbt/models'
+DBT_MACROS_PATH = '/app/dbt/macros'
+DB_PATH = '/data/db/meta_analytics.duckdb'
 
 try:
     import vanna
@@ -54,13 +45,14 @@ class MetaVannaCore:
     Provides natural language to SQL capabilities.
     """
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.5-pro-exp-03-25"):
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None, temperature: Optional[float] = None):
         """
         Initialize the Vanna integration.
         
         Args:
             api_key: Google API key. If None, will try to get from environment variable.
-            model: Gemini model to use.
+            model: Gemini model to use. If None, will try to get from environment variable.
+            temperature: Temperature for the model. If None, will try to get from environment variable.
         """
         if not VANNA_AVAILABLE:
             raise ImportError("Vanna not installed. Install with 'pip install vanna'")
@@ -68,11 +60,26 @@ class MetaVannaCore:
         if not GEMINI_AVAILABLE:
             raise ImportError("Google Generative AI not installed. Install with 'pip install google-generativeai'")
         
+        # Get API key from parameter or environment variable
         self.api_key = api_key or os.environ.get("GOOGLE_API_KEY")
         if not self.api_key:
             raise ValueError("Google API key not provided and not found in environment variables")
         
-        self.model = model
+        # Get model name from parameter or environment variable with fallback
+        self.model = model or os.environ.get("VANNA_MODEL", "gemini-2.5-pro-exp-03-25")
+        
+        # Get temperature from parameter or environment variable with fallback
+        self.temperature = temperature
+        if self.temperature is None:
+            temp_str = os.environ.get("VANNA_TEMPERATURE", "0.2")
+            try:
+                self.temperature = float(temp_str)
+            except ValueError:
+                logger.warning(f"Invalid temperature value '{temp_str}' in environment variables, using default 0.2")
+                self.temperature = 0.2
+        
+        logger.info(f"Initializing Vanna with model={self.model}, temperature={self.temperature}")
+        
         self.db_path = DB_PATH
         
         # Import specific Vanna components
@@ -94,6 +101,7 @@ class MetaVannaCore:
         self.vn = MyVanna(config={
             'api_key': self.api_key, 
             'model': self.model,
+            'temperature': self.temperature,
             'path': chroma_path  # Set ChromaDB path to data folder
         })
         
@@ -257,33 +265,6 @@ class MetaVannaCore:
                 "sql": sql,
                 "error": str(e)
             }
-    
-    def explain_sql(self, sql: str) -> str:
-        """
-        Explain a SQL query in natural language.
-        
-        Args:
-            sql: SQL query to explain
-            
-        Returns:
-            Natural language explanation of the SQL query
-        """
-        return self.vn.explain_sql(sql)
-    
-    def suggest_questions(self) -> List[str]:
-        """
-        Suggest questions that can be asked about the data.
-        
-        Returns:
-            List of suggested questions
-        """
-        return [
-            "What are the top 5 companies by ROI?",
-            "Which channel has the highest conversion rate?",
-            "How does CTR vary across different target audiences?",
-            "What is the average acquisition cost by month?",
-            "Which campaigns had the highest engagement score?"
-        ]
         
     def get_training_data(self) -> List[Dict[str, Any]]:
         """
@@ -300,19 +281,21 @@ class MetaVannaCore:
             return []
 
 
-def initialize_vanna(api_key: Optional[str] = None, train: bool = False) -> MetaVannaCore:
+def initialize_vanna(api_key: Optional[str] = None, model: Optional[str] = None, temperature: Optional[float] = None, train: bool = False) -> MetaVannaCore:
     """
     Initialize the Vanna integration.
     
     Args:
         api_key: Google API key. If None, will try to get from environment variable.
+        model: Gemini model to use. If None, will try to get from environment variable.
+        temperature: Temperature for the model. If None, will try to get from environment variable.
         train: Whether to train Vanna on dbt models after initialization.
             When training, existing training data will always be cleared first.
         
     Returns:
         Initialized MetaVannaCore instance
     """
-    vanna_instance = MetaVannaCore(api_key=api_key)
+    vanna_instance = MetaVannaCore(api_key=api_key, model=model, temperature=temperature)
     
     if train:
         vanna_instance.train_on_dbt_models()

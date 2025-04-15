@@ -1,0 +1,30 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first to leverage Docker cache
+COPY requirements.txt /requirements.txt
+RUN pip install --no-cache-dir -r /requirements.txt gunicorn
+
+# Copy application code to match the root filesystem structure from docker-compose
+COPY app/ /app/
+COPY data/ /data/
+COPY index.py /
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/
+ENV ENVIRONMENT=production
+# Note: VANNA_MODEL, VANNA_TEMPERATURE, and GOOGLE_API_KEY
+# should be set as environment variables in Cloud Run
+
+# Expose port for Cloud Run
+EXPOSE 8080
+
+# Command to run when the container starts
+CMD exec gunicorn --bind :8080 --workers 1 --threads 8 --timeout 0 index:app

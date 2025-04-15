@@ -32,15 +32,40 @@ except ImportError:
         VANNA_AVAILABLE = False
         GEMINI_AVAILABLE = False
 
-def get_api_key() -> Optional[str]:
-    """Get Google API key from environment or user input."""
+def get_vanna_config():
+    """Get Vanna configuration from environment variables or user input."""
+    # Get API key
     api_key = os.environ.get("GOOGLE_API_KEY")
     if not api_key:
         print("Google API key not found in environment variables.")
         api_key = input("Please enter your Google API key: ")
         if api_key:
             os.environ["GOOGLE_API_KEY"] = api_key
-    return api_key
+    
+    # Get model name
+    model = os.environ.get("VANNA_MODEL")
+    if not model:
+        print("Using default model: gemini-2.5-pro-exp-03-25")
+        model = "gemini-2.5-pro-exp-03-25"
+    
+    # Get temperature
+    temperature = None
+    temp_str = os.environ.get("VANNA_TEMPERATURE")
+    if temp_str:
+        try:
+            temperature = float(temp_str)
+        except ValueError:
+            print(f"Invalid temperature value '{temp_str}' in environment variables, using default 0.2")
+            temperature = 0.2
+    else:
+        temperature = 0.2
+        print(f"Using default temperature: {temperature}")
+    
+    return {
+        "api_key": api_key,
+        "model": model,
+        "temperature": temperature
+    }
 
 def print_results(results_df):
     """Print results in a formatted way."""
@@ -57,8 +82,6 @@ def interactive_mode(vanna_instance):
     print("\nWelcome to the Meta Demo Vanna CLI!")
     print("Ask questions about your social media advertising data in natural language.")
     print("Type 'exit', 'quit', or 'q' to exit.")
-    print("Type 'suggest' to see suggested questions.")
-    print("Type 'explain <sql>' to explain a SQL query.")
     print("\n")
     
     while True:
@@ -67,20 +90,6 @@ def interactive_mode(vanna_instance):
         if question.lower() in ['exit', 'quit', 'q']:
             print("Goodbye!")
             break
-        
-        if question.lower() == 'suggest':
-            suggestions = vanna_instance.suggest_questions()
-            print("\nSuggested questions:")
-            for i, suggestion in enumerate(suggestions, 1):
-                print(f"{i}. {suggestion}")
-            continue
-        
-        if question.lower().startswith('explain '):
-            sql = question[8:].strip()
-            explanation = vanna_instance.explain_sql(sql)
-            print("\nExplanation:")
-            print(explanation)
-            continue
         
         try:
             result = vanna_instance.ask(question)
@@ -185,22 +194,36 @@ def main():
         print("Google Generative AI not installed. Install with 'pip install google-generativeai'")
         return 1
     
-    api_key = args.api_key or get_api_key()
-    if not api_key:
+    # Get Vanna configuration from environment variables or command-line arguments
+    config = get_vanna_config()
+    if args.api_key:
+        config["api_key"] = args.api_key
+    
+    if not config["api_key"]:
         print("No API key provided. Exiting.")
         return 1
     
     try:
         # Handle different commands
         if args.command == 'train':
-            print("Initializing Vanna and training on dbt models...")
-            vanna_instance = initialize_vanna(api_key=api_key, train=True)
+            print(f"Initializing Vanna with model={config['model']}, temperature={config['temperature']} and training on dbt models...")
+            vanna_instance = initialize_vanna(
+                api_key=config["api_key"], 
+                model=config["model"], 
+                temperature=config["temperature"], 
+                train=True
+            )
             print("Vanna initialized and training completed successfully!")
             return 0
             
         # Initialize Vanna for all other commands
-        print("Initializing Vanna...")
-        vanna_instance = initialize_vanna(api_key=api_key, train=False)
+        print(f"Initializing Vanna with model={config['model']}, temperature={config['temperature']}...")
+        vanna_instance = initialize_vanna(
+            api_key=config["api_key"], 
+            model=config["model"], 
+            temperature=config["temperature"], 
+            train=False
+        )
         print("Vanna initialized successfully!")
         
         if args.command == 'view-training':
