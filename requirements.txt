@@ -25,3 +25,7 @@ jupyterlab~=4.4.0
 
 # Data transformation
 dbt-duckdb~=1.9.0
+
+# Vanna.ai for natural language to SQL
+vanna[chromadb,gemini,duckdb]~=0.7.0
+vertexai~=1.71.0

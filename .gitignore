@@ -1,6 +1,7 @@
 # Ignore dataset folder
 /dataset/
 /data/
+/backup/
 
 # Python
 __pycache__/

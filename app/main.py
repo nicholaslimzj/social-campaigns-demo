@@ -11,6 +11,7 @@ Commands:
     python -m app.main duckdb     - Initialize DuckDB and create views
     python -m app.main dashboard  - Start the dashboard
     python -m app.main serve      - Start a simple web server
+    python -m app.main vanna      - Start Vanna natural language to SQL CLI
 """
 
 import os
@@ -19,6 +20,19 @@ import time
 import logging
 from pathlib import Path
 from http.server import HTTPServer, SimpleHTTPRequestHandler
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    # Load .env file from app directory
+    env_path = Path(__file__).parent / '.env'
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path)
+        print(f"Loaded environment variables from {env_path}")
+    else:
+        print(f"No .env file found at {env_path}")
+except ImportError:
+    print("python-dotenv not installed, skipping .env loading")
 
 # Configure logging
 logging.basicConfig(
@@ -164,6 +178,66 @@ def run_dbt_models():
         return False
 
 
+def start_vanna(command=None):
+    """
+    Start the Vanna natural language to SQL CLI.
+    
+    Args:
+        command: Optional command to run (train, query, view-training)
+    """
+    logger.info(f"Starting Vanna natural language to SQL CLI with command: {command or 'interactive'}...")
+    
+    if not check_environment():
+        return False
+    
+    try:
+        # Import the vanna_cli module
+        import sys
+        
+        # Save original sys.argv
+        original_argv = sys.argv.copy()
+        
+        # Set sys.argv to just the script name for the CLI
+        # This prevents passing the 'vanna' argument to the CLI
+        sys.argv = [sys.argv[0]]
+        
+        # Add the appropriate command and flags
+        if command == 'train':
+            logger.info("Running Vanna training...")
+            sys.argv.append('train')
+        elif command == 'view-training':
+            logger.info("Viewing Vanna training data...")
+            sys.argv.append('view-training')
+        elif command == 'query':
+            logger.info("Starting Vanna query mode...")
+            sys.argv.append('query')
+            sys.argv.append('--interactive')
+        else:
+            # Default to interactive query mode
+            logger.info("Starting Vanna interactive query mode...")
+            sys.argv.append('query')
+            sys.argv.append('--interactive')
+        
+        try:
+            # Import and run Vanna CLI
+            from app.vanna_cli import main as run_vanna_cli
+            result = run_vanna_cli()
+            success = result == 0
+            
+            if success:
+                logger.info(f"Vanna command '{command or 'interactive'}' completed successfully")
+            else:
+                logger.error(f"Vanna command '{command or 'interactive'}' failed")
+                
+        finally:
+            # Restore original sys.argv
+            sys.argv = original_argv
+            
+        return success
+    except ImportError:
+        logger.error("Vanna module not found. Install with 'pip install vanna'")
+        return False
+
 def main():
     """
     Main function that runs when the application starts.
@@ -172,8 +246,14 @@ def main():
     
     # Parse command line arguments
     command = "check"  # Default command
+    subcommand = None  # For vanna subcommands
+    
     if len(sys.argv) > 1:
         command = sys.argv[1].lower()
+        
+        # Check for vanna subcommands
+        if command == "vanna" and len(sys.argv) > 2:
+            subcommand = sys.argv[2].lower()
     
     # Execute the requested command
     if command == "check":
@@ -186,9 +266,20 @@ def main():
         start_dashboard()
     elif command == "serve":
         start_server()
+    elif command == "vanna":
+        if subcommand == "train":
+            start_vanna(command="train")
+        elif subcommand == "view-training":
+            start_vanna(command="view-training")
+        elif subcommand == "query":
+            start_vanna(command="query")
+        else:
+            # Default to interactive mode
+            start_vanna()
     else:
         logger.error(f"Unknown command: {command}")
-        logger.info("Available commands: check, process, dbt, dashboard, serve")
+        logger.info("Available commands: check, process, dbt, dashboard, serve, vanna")
+        logger.info("Vanna subcommands: vanna train, vanna query, vanna view-training")
     
     logger.info("Meta Demo application completed")
 
