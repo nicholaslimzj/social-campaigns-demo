@@ -16,6 +16,7 @@ clean-targets:
 # Global configurations
 on-run-start:
   - "SET enable_object_cache=true;"
+  - "CREATE OR REPLACE MACRO DATA_ROOT() AS '/data';"
 
 models:
   meta_demo:

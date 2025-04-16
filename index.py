@@ -1,5 +1,7 @@
 import os
 import sys
+import json
+from http import HTTPStatus
 from pathlib import Path
 import logging
 
@@ -41,11 +43,20 @@ try:
 except ImportError:
     logger.warning("Could not import dotenv. Environment variables must be set manually.")
 
-# Now import the API handler after environment variables are loaded
-from app.api import init_app, app
+# Check if we should run in standby mode (no web server)
+STANDBY_MODE = os.environ.get('STANDBY_MODE', '').lower() in ('true', '1', 'yes')
 
-# Initialize the Flask app
-app = init_app()
+# Only import Flask app if not in standby mode
+app = None
+if not STANDBY_MODE:
+    # Import the API handler after environment variables are loaded
+    from app.api import init_app
+    
+    # Initialize the Flask app
+    app = init_app()
+    logger.info("Flask application initialized and ready to serve requests")
+else:
+    logger.info("Running in STANDBY_MODE - web server not started")
 
 # This file serves as the entry point for Vercel serverless functions
 def vercel_handler(request):
@@ -53,6 +64,13 @@ def vercel_handler(request):
     Entry point for Vercel serverless functions.
     This function is called by Vercel when a request is made to the API.
     """
+    if STANDBY_MODE:
+        return {
+            'statusCode': HTTPStatus.SERVICE_UNAVAILABLE,
+            'headers': {'Content-Type': 'application/json'},
+            'body': json.dumps({'error': "Server is running in standby mode. Web server is not available."})
+        }
+        
     # Get the path and method from the request
     path = request.get('path', '')
     http_method = request.get('method', 'GET').upper()

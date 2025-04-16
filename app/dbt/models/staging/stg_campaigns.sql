@@ -1,6 +1,5 @@
 {{ config(
-    materialized='view',
-    pre_hook="CREATE OR REPLACE MACRO DATA_ROOT() AS '/data';"
+    materialized='view'
 ) }}
 
 SELECT 

@@ -3,6 +3,6 @@ meta_demo:
   outputs:
     dev:
       type: duckdb
-      path: '/data/db/meta_analytics.duckdb'
+      path: '/data/db/meta_analytics_new.duckdb'
       extensions:
         - httpfs

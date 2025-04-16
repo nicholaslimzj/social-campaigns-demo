@@ -3,6 +3,8 @@ version: '3.8'
 services:
   app:
     build: .
+    networks:
+      - meta-demo-network
     volumes:
       # Mount the code directory
       - ./app:/app
@@ -36,9 +38,38 @@ services:
       - "8050:8050"  # For Dash/Plotly dashboard
       - "8501:8501"  # For Streamlit (if used)
       - "5000:5000"  # For Flask API server
-    # Override the default command if needed during development
-    # command: python -m app.some_script
     # Enable interactive terminal
+    stdin_open: true
+    tty: true
+    
+  dbt:
+    # Use the same image as the app service
+    build: .
+    # This prevents the service from starting with docker-compose up (without specifying services)
+    profiles: ["dbt"]
+    networks:
+      - meta-demo-network
+    environment:
+      - PYTHONPATH=/
+      - ENVIRONMENT=development
+      - DBT_PROFILES_DIR=/app/dbt
+      # Set to true to prevent web server from starting
+      - STANDBY_MODE=true
+    volumes:
+      # Mount the same volumes as the app service
+      - ./app:/app
+      - ./data:/data
+      - ./dataset:/dataset
+      - ./requirements.txt:/requirements.txt
+      - ./entrypoint.sh:/entrypoint.sh
+      - ./index.py:/index.py
+      - ./.env:/.env
+      - ./.env.development:/.env.development
+      - ./.env.production:/.env.production
+      # Use the same dependency caching
+      - python-packages:/usr/local/lib/python3.10/site-packages
+      - pip-cache:/root/.cache/pip
+    # Keep container running without starting the web server
     stdin_open: true
     tty: true
 
@@ -48,3 +79,8 @@ services:
 volumes:
   python-packages:  # Persistent volume for Python packages
   pip-cache:        # Persistent volume for pip cache
+
+# Define a named network that won't be automatically removed
+networks:
+  meta-demo-network:
+    name: meta-demo-network

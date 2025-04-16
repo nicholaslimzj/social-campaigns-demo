@@ -24,4 +24,9 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Command to run when the container starts
-CMD exec gunicorn --reload --workers 1 --bind 0.0.0.0:5000 index:app
+CMD if [ "$STANDBY_MODE" = "true" ]; then \
+    echo "Running in standby mode - web server not started" && \
+    tail -f /dev/null; \
+    else \
+    exec gunicorn --reload --workers 1 --bind 0.0.0.0:5000 index:app; \
+    fi
