@@ -1,0 +1,87 @@
+{
+  "name": "campaign_monthly_metrics",
+  "description": "Aggregates key campaign performance metrics from `stg_campaigns` on a monthly basis. Provides a time-series view for analyzing monthly trends, seasonality, and overall campaign effectiveness throughout the year. Used for monthly performance dashboards and seasonal analysis.",
+  "columns": [
+    {
+      "name": "month",
+      "type": "BIGINT",
+      "description": "The calendar month number (1-12) for which the metrics are aggregated. This serves as the primary key for this aggregated table.",
+      "tests": [
+        "unique",
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "campaign_count",
+      "type": "BIGINT",
+      "description": "The total number of distinct campaigns active during the month.",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_conversion_rate",
+      "type": "DOUBLE",
+      "description": "The average conversion rate across all campaigns active during the month. Typically expressed as a decimal (e.g., 0.08 for 8%).",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_roi",
+      "type": "DOUBLE",
+      "description": "The average Return on Investment (ROI) across all campaigns active during the month. Calculated as (Revenue - Cost) / Cost. Can be negative if campaigns were unprofitable.",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_acquisition_cost",
+      "type": "DOUBLE",
+      "description": "The average cost to acquire a customer (or desired conversion) across all campaigns active during the month.",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "total_clicks",
+      "type": "HUGEINT",
+      "description": "The total number of clicks recorded across all campaigns during the month.",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "total_impressions",
+      "type": "HUGEINT",
+      "description": "The total number of impressions recorded across all campaigns during the month.",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "overall_ctr",
+      "type": "FLOAT",
+      "description": "The overall Click-Through Rate (CTR) for the month, calculated as (Total Clicks / Total Impressions). Expressed as a decimal.",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    }
+  ],
+  "tags": []
+}

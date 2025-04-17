@@ -114,7 +114,7 @@ metadata_prompt = ChatPromptTemplate.from_messages([
 class DBTMetadataGenerator:
     """Generate metadata YAML files for dbt models using LangChain."""
     
-    def __init__(self, dbt_project_path: str, llm_model: str = "gemini-2.5-pro-exp-03-25", temperature: float = 0.2):
+    def __init__(self, dbt_project_path: str, llm_model: str = "gemini-2.5-pro-preview-03-25", temperature: float = 0.2):
         """Initialize the metadata generator."""
         self.dbt_project_path = dbt_project_path
         self.models_path = os.path.join(dbt_project_path, "models")
@@ -358,7 +358,7 @@ class DBTMetadataGenerator:
         return results
 
 
-def generate_metadata(model_type="all", model_name=None, llm_model="gemini-2.5-pro-exp-03-25", temperature=0.2, skip_existing=False, vanna_json=False):
+def generate_metadata(model_type="all", model_name=None, llm_model="gemini-2.5-pro-preview-03-25", temperature=0.2, skip_existing=False, vanna_json=False):
     """
     Main function to generate metadata for dbt models.
     

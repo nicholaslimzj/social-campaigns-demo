@@ -1,0 +1,2 @@
+ curl -X POST -H "Content-Type: application/json" -d '{"question":"What is the ROI by channel for Cyber Circuit?","company":"Cyber Circuit"}' https://localhost:5000/api/ask
+{"question":"What is the ROI by channel for Cyber Circuit? for Cyber Circuit","results":{"columns":["Channel_Used","avg(ROI)"],"data":[["Facebook",4.029616883116884],["Twitter",4.0485753237900495],["Pinterest",0.7360176615724051],["Instagram",4.075237776289349]]},"sql":"SELECT Channel_Used, avg(ROI)\nFROM stg_campaigns\nWHERE Company = 'Cyber Circuit'\nGROUP BY Channel_Used;"}

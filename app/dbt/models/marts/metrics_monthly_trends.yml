@@ -1,0 +1,93 @@
+version: 2
+
+models:
+  - name: metrics_monthly_trends
+    description: "Mart model that analyzes monthly performance trends for key metrics (Conversion Rate, ROI, Acquisition Cost, CTR) per company. It calculates 3-month moving averages and identifies significant trend changes (upward, downward, or stable) compared to previous periods. This model is designed to support trend-based decision making and populate performance dashboards, specifically focusing on trend analysis, performance change alerts, and month-over-month comparisons."
+    config:
+      materialized: table
+      tags: ['mart', 'trends', 'performance', 'monthly', 'analytics']
+    columns:
+      - name: Company
+        description: "The unique identifier for the company whose metrics are being analyzed."
+        tests:
+          - not_null
+          # Test that the company exists in the staging layer
+          - relationships:
+              to: ref('stg_campaigns')
+              field: Company
+          # Test for the primary key combination of the table
+          - dbt_utils.unique_combination_of_columns:
+              combination_of_columns:
+                - Company
+                - month
+
+      - name: month
+        description: "The numerical representation of the month (1-12) for which the metrics are calculated. Note: Only includes months >= 4 due to the 3-month moving average calculation requirement."
+        tests:
+          - not_null
+          # Months should be within the valid range, considering the filter
+          - accepted_values:
+              values: [4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+      - name: avg_conversion_rate
+        description: "The average conversion rate for the company during the specified month."
+        tests:
+          - not_null
+          # Conversion rate should generally be non-negative
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+      - name: conversion_rate_ma
+        description: "The 3-month moving average of the conversion rate, calculated using the current month and the two preceding months. Smooths out short-term fluctuations to reveal underlying trends."
+        tests:
+          - not_null:
+              # This test assumes sufficient data exists for months >= 4 as per the model's final filter
+              config:
+                where: "month >= 4" # Explicitly state assumption based on model logic
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+      - name: prev_conversion_rate_ma
+        description: "The 3-month moving average of the conversion rate from three months prior to the current month. Used as a baseline for detecting significant trend changes."
+        tests:
+          # This might be null if a company has less than 6 months of data initially,
+          # but the final WHERE clause (month >= 4) combined with LAG(..., 3) should ensure it's populated
+          # for the rows included in the final table. Adding not_null based on final output.
+          - not_null:
+              config:
+                where: "month >= 4" # Based on final model output filter
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+      - name: conversion_rate_trend_change
+        description: "Indicator of significant change in the conversion rate trend compared to 3 months prior. Values: 1 (Upward change), -1 (Downward change), 0 (No significant change or insufficient history)."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [-1, 0, 1]
+
+      - name: roi_trend_change
+        description: "Indicator of significant change in the Return on Investment (ROI) trend compared to 3 months prior. Values: 1 (Upward change), -1 (Downward change), 0 (No significant change or insufficient history)."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [-1, 0, 1]
+
+      - name: acquisition_cost_trend_change
+        description: "Indicator of significant change in the Acquisition Cost trend compared to 3 months prior. Note: Lower cost is better. Values: 1 (Downward change - improvement), -1 (Upward change - worsening), 0 (No significant change or insufficient history)."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [-1, 0, 1]
+
+      - name: ctr_trend_change
+        description: "Indicator of significant change in the Click-Through Rate (CTR) trend compared to 3 months prior. Values: 1 (Upward change), -1 (Downward change), 0 (No significant change or insufficient history)."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [-1, 0, 1]
+
+      - name: has_trend_change
+        description: "Boolean flag (TRUE/FALSE) indicating if there was a significant trend change detected in *any* of the key metrics (Conversion Rate, ROI, Acquisition Cost, CTR) for the month compared to 3 months prior."
+        tests:
+          - not_null

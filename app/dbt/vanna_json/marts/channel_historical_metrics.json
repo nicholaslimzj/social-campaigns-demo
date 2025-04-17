@@ -1,0 +1,87 @@
+{
+  "name": "channel_historical_metrics",
+  "description": "Aggregates historical campaign performance metrics by marketing channel. Provides insights for channel effectiveness comparison, ROI analysis, and media mix optimization. Used in Channel Performance dashboards, Media Mix recommendations, and ROI comparison visualizations.",
+  "columns": [
+    {
+      "name": "Channel_Used",
+      "type": "VARCHAR",
+      "description": "The marketing channel used for the campaigns (e.g., Facebook, Pinterest, Instagram, Twitter). This serves as the primary key for this aggregated model.",
+      "tests": [
+        "not_null",
+        "unique",
+        "relationships"
+      ],
+      "tags": []
+    },
+    {
+      "name": "campaign_count",
+      "type": "BIGINT",
+      "description": "The total number of distinct campaigns run on this channel across all historical data.",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_greater_than_or_equal_to"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_conversion_rate",
+      "type": "DOUBLE",
+      "description": "The average conversion rate across all campaigns for this channel. Represents the average efficiency of campaigns in achieving their conversion goals on this channel.",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_roi",
+      "type": "DOUBLE",
+      "description": "The average Return on Investment (ROI) across all campaigns for this channel. Indicates the average profitability of marketing spend on this channel.",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_acquisition_cost",
+      "type": "DOUBLE",
+      "description": "The average cost to acquire a customer or achieve a conversion (CPA/CAC) across all campaigns for this channel.",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_greater_than_or_equal_to"
+      ],
+      "tags": []
+    },
+    {
+      "name": "total_clicks",
+      "type": "HUGEINT",
+      "description": "The total number of clicks accumulated across all campaigns attributed to this channel.",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_greater_than_or_equal_to"
+      ],
+      "tags": []
+    },
+    {
+      "name": "total_impressions",
+      "type": "HUGEINT",
+      "description": "The total number of impressions (ad views) accumulated across all campaigns attributed to this channel.",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_greater_than_or_equal_to"
+      ],
+      "tags": []
+    },
+    {
+      "name": "overall_ctr",
+      "type": "FLOAT",
+      "description": "The overall Click-Through Rate (CTR) for this channel, calculated as Total Clicks / Total Impressions across all campaigns. Measures the overall effectiveness of ad creatives and targeting on this channel.",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    }
+  ],
+  "tags": []
+}

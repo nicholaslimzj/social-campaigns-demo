@@ -1,0 +1,327 @@
+{
+  "name": "campaign_historical_clusters",
+  "description": "Identifies high-performing campaign combinations (clusters) across all historical data.\nThis model groups campaigns by Goal, Segment, Channel, and Duration Bucket, calculates aggregate performance metrics for each combination,\nranks them based on various KPIs (ROI, Conversion Rate, Acquisition Cost, CTR), calculates a composite performance score,\ndetermines the optimal duration range for each Goal-Segment-Channel group based on ROI, and flags the top-performing combinations ('winning combinations').\nIt supports analysis for campaign optimization and dashboard reporting. The analysis considers only combinations with at least 3 campaigns for statistical significance.\n",
+  "columns": [
+    {
+      "name": "Company",
+      "type": "VARCHAR",
+      "description": "Identifier for the company associated with the campaign combination.",
+      "tests": [
+        "not_null",
+        "dbt_utils.unique_combination_of_columns",
+        "relationships"
+      ],
+      "tags": []
+    },
+    {
+      "name": "goal",
+      "type": "VARCHAR",
+      "description": "The primary objective (e.g., 'Increase Sales', 'Brand Awareness') of the campaigns within this combination.",
+      "tests": [
+        "not_null",
+        "relationships"
+      ],
+      "tags": []
+    },
+    {
+      "name": "segment",
+      "type": "VARCHAR",
+      "description": "The target customer segment (e.g., 'Fashion', 'Tech Enthusiasts') for the campaigns within this combination.",
+      "tests": [
+        "not_null",
+        "relationships"
+      ],
+      "tags": []
+    },
+    {
+      "name": "channel",
+      "type": "VARCHAR",
+      "description": "The marketing channel (e.g., 'Facebook', 'Google Ads', 'Email') used for the campaigns within this combination.",
+      "tests": [
+        "not_null",
+        "relationships"
+      ],
+      "tags": []
+    },
+    {
+      "name": "duration_bucket",
+      "type": "VARCHAR",
+      "description": "The duration category (e.g., '1-7 days', '8-14 days') into which the campaigns within this combination fall.",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_conversion_rate",
+      "type": "DOUBLE",
+      "description": "The average conversion rate achieved by campaigns within this specific combination.",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_roi",
+      "type": "DOUBLE",
+      "description": "The average Return on Investment (ROI) achieved by campaigns within this specific combination.",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_acquisition_cost",
+      "type": "DOUBLE",
+      "description": "The average cost to acquire a customer (Acquisition Cost) for campaigns within this specific combination.",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_ctr",
+      "type": "FLOAT",
+      "description": "The average Click-Through Rate (CTR) achieved by campaigns within this specific combination.",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "campaign_count",
+      "type": "BIGINT",
+      "description": "The total number of individual campaigns included in this specific combination (minimum 3).",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "min_duration",
+      "type": "BIGINT",
+      "description": "The minimum duration (in days) among campaigns within this specific combination.",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "max_duration",
+      "type": "BIGINT",
+      "description": "The maximum duration (in days) among campaigns within this specific combination.",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_duration",
+      "type": "DOUBLE",
+      "description": "The average duration (in days) of campaigns within this specific combination.",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "conversion_rate_vs_company",
+      "type": "DOUBLE",
+      "description": "Ratio comparing this combination's average conversion rate to the company's overall average conversion rate across all combinations (Value > 1 means better than company average).",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "roi_vs_company",
+      "type": "DOUBLE",
+      "description": "Ratio comparing this combination's average ROI to the company's overall average ROI across all combinations (Value > 1 means better than company average).",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "acquisition_cost_vs_company",
+      "type": "DOUBLE",
+      "description": "Ratio comparing the company's overall average acquisition cost to this combination's average acquisition cost (Value > 1 means lower/better cost than company average).",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "ctr_vs_company",
+      "type": "DOUBLE",
+      "description": "Ratio comparing this combination's average CTR to the company's overall average CTR across all combinations (Value > 1 means better than company average).",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "conversion_rate_vs_global",
+      "type": "DOUBLE",
+      "description": "Ratio comparing this combination's average conversion rate to the global average conversion rate across all companies and combinations (Value > 1 means better than global average).",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "roi_vs_global",
+      "type": "DOUBLE",
+      "description": "Ratio comparing this combination's average ROI to the global average ROI across all companies and combinations (Value > 1 means better than global average).",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "acquisition_cost_vs_global",
+      "type": "DOUBLE",
+      "description": "Ratio comparing the global average acquisition cost to this combination's average acquisition cost (Value > 1 means lower/better cost than global average).",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "ctr_vs_global",
+      "type": "DOUBLE",
+      "description": "Ratio comparing this combination's average CTR to the global average CTR across all companies and combinations (Value > 1 means better than global average).",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "conversion_rate_rank",
+      "type": "BIGINT",
+      "description": "Rank of this combination within the company based on average conversion rate (1 = highest conversion rate).",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "roi_rank",
+      "type": "BIGINT",
+      "description": "Rank of this combination within the company based on average ROI (1 = highest ROI).",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "acquisition_cost_rank",
+      "type": "BIGINT",
+      "description": "Rank of this combination within the company based on average acquisition cost (1 = lowest acquisition cost).",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "ctr_rank",
+      "type": "BIGINT",
+      "description": "Rank of this combination within the company based on average CTR (1 = highest CTR).",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "composite_rank",
+      "type": "BIGINT",
+      "description": "Overall rank of this combination within the company based on the weighted composite score (1 = best overall performance).",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "composite_score",
+      "type": "DECIMAL(24,1)",
+      "description": "Weighted score reflecting overall performance, calculated from individual metric ranks (lower score indicates better performance). Weights: ROI (0.4), Conversion Rate (0.3), Acquisition Cost (0.2), CTR (0.1).",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "optimal_duration_bucket",
+      "type": "VARCHAR",
+      "description": "The duration bucket identified as having the highest average ROI for this specific Company-Goal-Segment-Channel group, irrespective of the current row's duration bucket.",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "optimal_min_duration",
+      "type": "BIGINT",
+      "description": "The minimum duration (in days) associated with the optimal duration bucket for this Company-Goal-Segment-Channel group.",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "optimal_max_duration",
+      "type": "BIGINT",
+      "description": "The maximum duration (in days) associated with the optimal duration bucket for this Company-Goal-Segment-Channel group.",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "is_winning_combination",
+      "type": "BOOLEAN",
+      "description": "Boolean flag indicating if this combination ranks within the top 10% by composite score within its company (TRUE if winning, FALSE otherwise).",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "is_optimal_duration",
+      "type": "BOOLEAN",
+      "description": "Boolean flag indicating if this combination's duration bucket matches the identified optimal duration bucket for its Company-Goal-Segment-Channel group (TRUE if it matches, FALSE otherwise).",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "optimal_duration_range",
+      "type": "VARCHAR",
+      "description": "A user-friendly string representing the optimal duration range (e.g., '15-21 days') based on the optimal min/max duration for this Company-Goal-Segment-Channel group.",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    }
+  ],
+  "tags": []
+}

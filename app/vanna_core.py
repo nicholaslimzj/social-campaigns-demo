@@ -23,6 +23,7 @@ DATA_ROOT_PATH = '/data'
 DBT_MODELS_PATH = '/app/dbt/models'
 DBT_MACROS_PATH = '/app/dbt/macros'
 DB_PATH = '/data/db/meta_analytics.duckdb'
+DBT_PROJECT_PATH = '/app/dbt'  # Added for vanna_json path resolution
 
 try:
     import vanna
@@ -66,7 +67,7 @@ class MetaVannaCore:
             raise ValueError("Google API key not provided and not found in environment variables")
         
         # Get model name from parameter or environment variable with fallback
-        self.model = model or os.environ.get("VANNA_MODEL", "gemini-2.5-pro-exp-03-25")
+        self.model = model or os.environ.get("VANNA_MODEL", "gemini-2.5-pro-preview-03-25")
         
         # Get temperature from parameter or environment variable with fallback
         self.temperature = temperature
@@ -164,9 +165,25 @@ class MetaVannaCore:
         except Exception as e:
             logger.warning(f"Could not clear existing training data: {e}")
         
-        logger.info("Training Vanna on dbt models...")
-        
-        # First, train on information schema to understand the database structure
+        logger.info("Training Vanna on dbt models (using Vanna JSON files)...")
+
+        import os
+        import json
+
+        vanna_json_root = os.path.join(DBT_PROJECT_PATH, "vanna_json")
+        all_models = []
+        for root, dirs, files in os.walk(vanna_json_root):
+            for file in files:
+                if file.endswith('.json'):
+                    with open(os.path.join(root, file), 'r') as f:
+                        model = json.load(f)
+                        all_models.append(model)
+
+        if not all_models:
+            logger.warning(f"No Vanna JSON files found in {vanna_json_root}. Nothing to train.")
+            return
+
+        # 1. Train on information schema
         try:
             logger.info("Training on information schema...")
             df_information_schema = self.vn.run_sql("SELECT * FROM INFORMATION_SCHEMA.COLUMNS")
@@ -175,58 +192,22 @@ class MetaVannaCore:
             logger.info("Information schema training completed")
         except Exception as e:
             logger.warning(f"Could not train on information schema: {e}")
-        
-        # Note: We're not training on the raw dbt SQL files because they contain Jinja templating
-        # and macros that might confuse the LLM. Instead, we rely on the information schema
-        # and documentation to provide the necessary context.
-        
-        # Add documentation about the data structure
-        self.vn.train(
-            documentation="""
-            The Meta Demo project contains social media advertising data with the following structure:
-            
-            Base columns:
-            - Campaign_ID: Unique identifier for each campaign (primary key, use for counting unique campaigns)
-            - Target_Audience: Demographic target (e.g., "Men 35-44") (dimension for grouping/filtering)
-            - Campaign_Goal: Purpose of campaign (e.g., "Product Launch") (dimension for grouping/filtering)
-            - Duration: Length of campaign (e.g., "15 Days") (can be used for time-based analysis)
-            - Channel_Used: Social media platform (e.g., "Instagram", "Facebook") (dimension for grouping/filtering)
-            - Conversion_Rate: Rate of conversions (float) (metric for averaging)
-            - Acquisition_Cost: Cost per acquisition (float) (metric for averaging/summing)
-            - ROI: Return on investment (float) (metric for averaging)
-            - Location: Geographic location (e.g., "Las Vegas") (dimension for grouping/filtering)
-            - Language: Campaign language (e.g., "Spanish") (dimension for grouping/filtering)
-            - Clicks: Number of clicks (integer) (metric for summing)
-            - Impressions: Number of impressions (integer) (metric for summing)
-            - Engagement_Score: Engagement level (integer) (metric for averaging)
-            - Customer_Segment: Target segment (e.g., "Health") (dimension for grouping/filtering)
-            - Date: Campaign date (date) (dimension for time-based grouping/filtering)
-            - Company: Company running the campaign (e.g., "Aura Align") (dimension for grouping/filtering)
-            
-            Derived metrics:
-            - CTR: Click-through rate (Clicks/Impressions) (calculated ratio, useful for comparing performance)
-            - CPC: Cost per click (Acquisition_Cost/Clicks) (calculated ratio, useful for cost analysis)
-            - ROAS: Return on ad spend (ROI + 1) (calculated ratio, useful for ROI analysis)
-            - StandardizedDate: Standardized date format (useful for consistent date filtering/grouping)
-            
-            Aggregated metrics (available in mart models):
-            - campaign_count: Count of campaigns (COUNT aggregation, useful for volume analysis)
-            - avg_conversion_rate: Average conversion rate (AVG aggregation, useful for performance analysis)
-            - avg_roi: Average ROI (AVG aggregation, useful for investment analysis)
-            - avg_acquisition_cost: Average acquisition cost (AVG aggregation, useful for cost analysis)
-            - total_clicks: Sum of clicks (SUM aggregation, useful for engagement analysis)
-            - total_impressions: Sum of impressions (SUM aggregation, useful for reach analysis)
-            - overall_ctr: Overall CTR (total_clicks/total_impressions) (calculated from aggregates, useful for overall performance)
-            
-            Common aggregation patterns:
-            - GROUP BY dimensions (Target_Audience, Channel_Used, Customer_Segment, Company, etc.)
-            - Filter by dimensions using WHERE clauses
-            - Extract time components from Date for time-based analysis (EXTRACT(MONTH FROM Date))
-            - Use window functions for comparative analysis (RANK, DENSE_RANK, ROW_NUMBER)
-            """
-        )
-        
-        logger.info("Vanna training completed")
+
+        # 2. Train on each Vanna JSON file individually
+        trained_count = 0
+        for root, dirs, files in os.walk(vanna_json_root):
+            for file in files:
+                if file.endswith('.json'):
+                    json_path = os.path.join(root, file)
+                    try:
+                        with open(json_path, 'r') as f:
+                            doc_string = f.read()
+                        self.vn.train(documentation=doc_string)
+                        logger.info(f"Trained on Vanna JSON documentation: {json_path}")
+                        trained_count += 1
+                    except Exception as e:
+                        logger.warning(f"Could not train on Vanna JSON file {json_path}: {e}")
+        logger.info(f"Vanna training completed ({trained_count} JSON files trained)")
     
     def ask(self, question: str) -> Dict[str, Any]:
         """

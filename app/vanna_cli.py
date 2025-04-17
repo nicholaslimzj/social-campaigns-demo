@@ -45,8 +45,8 @@ def get_vanna_config():
     # Get model name
     model = os.environ.get("VANNA_MODEL")
     if not model:
-        print("Using default model: gemini-2.5-pro-exp-03-25")
-        model = "gemini-2.5-pro-exp-03-25"
+        print("Using default model: gemini-2.5-pro-preview-03-25")
+        model = "gemini-2.5-pro-preview-03-25"
     
     # Get temperature
     temperature = None

@@ -39,7 +39,7 @@ def init_app() -> Flask:
         try:
             # Get configuration from environment variables
             api_key = os.environ.get("GOOGLE_API_KEY")
-            model = os.environ.get("VANNA_MODEL", "gemini-2.5-pro-exp-03-25")
+            model = os.environ.get("VANNA_MODEL", "gemini-2.5-pro-preview-03-25")
             temp_str = os.environ.get("VANNA_TEMPERATURE", "0.2")
             
             # Convert temperature to float

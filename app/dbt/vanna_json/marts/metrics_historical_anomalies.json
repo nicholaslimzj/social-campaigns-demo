@@ -1,0 +1,298 @@
+{
+  "name": "metrics_historical_anomalies",
+  "description": "Identifies anomalies in key performance metrics for each company on a monthly basis.\nIt calculates rolling 3-month statistics (mean and standard deviation) for metrics like conversion rate, ROI, acquisition cost, clicks, impressions, and CTR.\nAnomalies are flagged using a Z-score methodology, where a deviation greater than 2 standard deviations from the rolling mean is considered an anomaly.\nThis model is intended for performance monitoring dashboards, anomaly detection alerts, and risk management visualizations.\n",
+  "columns": [
+    {
+      "name": "Company",
+      "type": "VARCHAR",
+      "description": "Identifier for the company whose metrics are being analyzed.",
+      "tests": [
+        "not_null",
+        "relationships",
+        "dbt_utils.unique_combination_of_columns"
+      ],
+      "tags": []
+    },
+    {
+      "name": "month",
+      "type": "BIGINT",
+      "description": "The calendar month number (1-12) for which the metrics and anomalies are calculated.",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_conversion_rate",
+      "type": "DOUBLE",
+      "description": "The average conversion rate for the company during the specified month.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "conversion_rate_mean",
+      "type": "DOUBLE",
+      "description": "Rolling 3-month average conversion rate (excluding the current month) used as the expected value for anomaly detection.",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "conversion_rate_std",
+      "type": "DOUBLE",
+      "description": "Rolling 3-month standard deviation of the conversion rate (excluding the current month) used to measure volatility.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "conversion_rate_z",
+      "type": "DOUBLE",
+      "description": "Z-score for the monthly average conversion rate, indicating deviation from the rolling mean in terms of standard deviations. Calculated as (value - rolling_mean) / rolling_std.",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "conversion_rate_anomaly",
+      "type": "VARCHAR",
+      "description": "Flag indicating if the monthly average conversion rate is an anomaly ('anomaly' if absolute Z-score > 2, 'normal' otherwise).",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_roi",
+      "type": "DOUBLE",
+      "description": "The average Return on Investment (ROI) for the company during the specified month.",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "roi_mean",
+      "type": "DOUBLE",
+      "description": "Rolling 3-month average ROI (excluding the current month) used as the expected value for anomaly detection.",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "roi_std",
+      "type": "DOUBLE",
+      "description": "Rolling 3-month standard deviation of ROI (excluding the current month) used to measure volatility.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "roi_z",
+      "type": "DOUBLE",
+      "description": "Z-score for the monthly average ROI. Calculated as (value - rolling_mean) / rolling_std.",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "roi_anomaly",
+      "type": "VARCHAR",
+      "description": "Flag indicating if the monthly average ROI is an anomaly ('anomaly' if absolute Z-score > 2, 'normal' otherwise).",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_acquisition_cost",
+      "type": "DOUBLE",
+      "description": "The average acquisition cost for the company during the specified month.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "acquisition_cost_mean",
+      "type": "DOUBLE",
+      "description": "Rolling 3-month average acquisition cost (excluding the current month) used as the expected value.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "acquisition_cost_std",
+      "type": "DOUBLE",
+      "description": "Rolling 3-month standard deviation of acquisition cost (excluding the current month).",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "acquisition_cost_z",
+      "type": "DOUBLE",
+      "description": "Z-score for the monthly average acquisition cost. Calculated as (value - rolling_mean) / rolling_std.",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "acquisition_cost_anomaly",
+      "type": "VARCHAR",
+      "description": "Flag indicating if the monthly average acquisition cost is an anomaly ('anomaly' if absolute Z-score > 2, 'normal' otherwise).",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "total_clicks",
+      "type": "HUGEINT",
+      "description": "Total number of clicks for the company during the specified month.",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "clicks_mean",
+      "type": "DOUBLE",
+      "description": "Rolling 3-month average of total clicks (excluding the current month).",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "clicks_std",
+      "type": "DOUBLE",
+      "description": "Rolling 3-month standard deviation of total clicks (excluding the current month).",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "clicks_z",
+      "type": "DOUBLE",
+      "description": "Z-score for the total monthly clicks. Calculated as (value - rolling_mean) / rolling_std.",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "clicks_anomaly",
+      "type": "VARCHAR",
+      "description": "Flag indicating if the total monthly clicks is an anomaly ('anomaly' if absolute Z-score > 2, 'normal' otherwise).",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "total_impressions",
+      "type": "HUGEINT",
+      "description": "Total number of impressions for the company during the specified month.",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "impressions_mean",
+      "type": "DOUBLE",
+      "description": "Rolling 3-month average of total impressions (excluding the current month).",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "impressions_std",
+      "type": "DOUBLE",
+      "description": "Rolling 3-month standard deviation of total impressions (excluding the current month).",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "impressions_z",
+      "type": "DOUBLE",
+      "description": "Z-score for the total monthly impressions. Calculated as (value - rolling_mean) / rolling_std.",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "impressions_anomaly",
+      "type": "VARCHAR",
+      "description": "Flag indicating if the total monthly impressions is an anomaly ('anomaly' if absolute Z-score > 2, 'normal' otherwise).",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "monthly_ctr",
+      "type": "FLOAT",
+      "description": "Click-Through Rate (CTR) calculated for the company during the specified month (Total Clicks / Total Impressions).",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "ctr_mean",
+      "type": "DOUBLE",
+      "description": "Rolling 3-month average CTR (excluding the current month).",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "ctr_std",
+      "type": "DOUBLE",
+      "description": "Rolling 3-month standard deviation of CTR (excluding the current month).",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "ctr_z",
+      "type": "DOUBLE",
+      "description": "Z-score for the monthly CTR. Calculated as (value - rolling_mean) / rolling_std.",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "ctr_anomaly",
+      "type": "VARCHAR",
+      "description": "Flag indicating if the monthly CTR is an anomaly ('anomaly' if absolute Z-score > 2, 'normal' otherwise).",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "has_anomaly",
+      "type": "BOOLEAN",
+      "description": "Boolean flag indicating if ANY metric for the given company and month was flagged as an anomaly. Useful for filtering.",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    }
+  ],
+  "tags": []
+}

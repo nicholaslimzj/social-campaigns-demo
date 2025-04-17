@@ -27,13 +27,6 @@ services:
       # Base configuration
       - PYTHONPATH=/
       - ENVIRONMENT=development
-      
-      # Vanna configuration
-      - VANNA_MODEL=gemini-1.5-pro-002
-      - VANNA_TEMPERATURE=0.2
-      
-      # The API key should come from .env file for security
-      # - GOOGLE_API_KEY=your_api_key
     ports:
       # Expose ports for any web services we might add
       - "8050:8050"  # For Dash/Plotly dashboard

@@ -1,0 +1,278 @@
+version: 2
+
+models:
+  - name: campaign_duration_historical_analysis
+    description: |
+      Mart model that analyzes historical campaign data to understand the relationship between campaign duration and key performance indicators (KPIs) like ROI and Conversion Rate.
+      It buckets campaigns by duration, calculates average performance metrics for each bucket across various dimensions (overall, goal, segment, channel, goal-segment, goal-channel), identifies the optimal duration bucket based on maximizing average ROI for each dimension, and quantifies the potential ROI impact of using optimal versus actual durations.
+      The model combines these analyses (optimal duration recommendations, exact duration performance trends, and ROI impact) into a single table structure distinguished by the 'analysis_type' column.
+      This model supports dashboards visualizing campaign duration impact and providing optimization recommendations.
+    config:
+      materialized: table
+      tags:
+        - 'mart'
+        - 'campaigns'
+        - 'analysis'
+        - 'optimization'
+        - 'historical'
+    columns:
+      - name: analysis_type
+        description: "Indicates the type of analysis represented by the row: 'optimal_durations' (recommendations), 'exact_duration_performance' (performance by specific day count), or 'roi_impact_analysis' (comparison of actual vs optimal)."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['optimal_durations', 'exact_duration_performance', 'roi_impact_analysis']
+
+      - name: dimension
+        description: "The dimension used for grouping when calculating optimal durations (e.g., 'Overall', 'Goal', 'Segment', 'Channel', 'Goal-Segment', 'Goal-Channel'). Populated only when analysis_type is 'optimal_durations'."
+        tests:
+          - accepted_values:
+              values: ['Overall', 'Goal', 'Segment', 'Channel', 'Goal-Segment', 'Goal-Channel']
+              quote: true # Values contain hyphens
+              config:
+                where: "analysis_type = 'optimal_durations'"
+
+      - name: category
+        description: "The specific category within the dimension for which the optimal duration is calculated (e.g., 'All', 'Increase Sales', 'High-Value', 'Email', 'Increase Sales - High-Value'). Populated only when analysis_type is 'optimal_durations'."
+        # No specific value test here as categories can be numerous and dynamic.
+        # A not_null test conditional on analysis_type could be added if desired.
+        # tests:
+        #   - not_null:
+        #       config:
+        #         where: "analysis_type = 'optimal_durations'"
+
+      - name: optimal_duration_bucket
+        description: "The duration bucket identified as having the highest average ROI for the given dimension and category. Populated only when analysis_type is 'optimal_durations'."
+        tests:
+          - accepted_values:
+              values: ['1-7 days', '8-14 days', '15-21 days', '22-30 days', '31-45 days', '46-60 days', '60+ days']
+              quote: false # Values do not require quotes
+              config:
+                where: "analysis_type = 'optimal_durations'"
+
+      - name: optimal_min_duration
+        description: "The minimum campaign duration (in days) included in the optimal duration bucket. Populated only when analysis_type is 'optimal_durations'."
+        tests:
+          - dbt_expectations.expect_column_values_to_be_positive:
+              config:
+                where: "analysis_type = 'optimal_durations'"
+
+      - name: optimal_max_duration
+        description: "The maximum campaign duration (in days) included in the optimal duration bucket. Populated only when analysis_type is 'optimal_durations'."
+        tests:
+          - dbt_expectations.expect_column_values_to_be_positive:
+              config:
+                where: "analysis_type = 'optimal_durations'"
+          # Optional: Check max >= min
+          # - dbt_expectations.expect_column_pair_values_a_to_be_greater_than_or_equal_to_b:
+          #     column_a: optimal_max_duration
+          #     column_b: optimal_min_duration
+          #     config:
+          #       where: "analysis_type = 'optimal_durations'"
+
+      - name: optimal_roi
+        description: "The average Return on Investment (ROI) observed within the optimal duration bucket for the given dimension and category. Populated only when analysis_type is 'optimal_durations'."
+        tests:
+          - dbt_expectations.expect_column_values_to_not_be_null:
+              config:
+                where: "analysis_type = 'optimal_durations'"
+
+      - name: optimal_conversion_rate
+        description: "The average Conversion Rate observed within the optimal duration bucket for the given dimension and category. Populated only when analysis_type is 'optimal_durations'."
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              # Max value could theoretically exceed 1 if defined differently, but typically <= 1
+              # max_value: 1
+              config:
+                where: "analysis_type = 'optimal_durations'"
+
+      - name: optimal_roi_per_day
+        description: "The average Return on Investment (ROI) per day observed within the optimal duration bucket, used to normalize ROI across different durations. Populated only when analysis_type is 'optimal_durations'."
+        tests:
+          - dbt_expectations.expect_column_values_to_not_be_null:
+              config:
+                where: "analysis_type = 'optimal_durations'"
+
+      - name: optimal_duration_range
+        description: "A formatted string representing the optimal duration range (e.g., '15-21 days'). Populated only when analysis_type is 'optimal_durations'."
+        # Optional: Could add regex pattern test if format is strict
+        # tests:
+        #   - dbt_expectations.expect_column_values_to_match_regex:
+        #       regex: '^\d+-\d+ days$'
+        #       config:
+        #         where: "analysis_type = 'optimal_durations'"
+
+      - name: Duration
+        description: "The exact duration of campaigns in days. Populated only when analysis_type is 'exact_duration_performance'."
+        tests:
+          - dbt_expectations.expect_column_values_to_be_positive:
+              config:
+                where: "analysis_type = 'exact_duration_performance'"
+
+      - name: campaign_count
+        description: "The number of campaigns included in the aggregation group (e.g., for a specific duration bucket, exact duration, or goal/segment/channel/bucket combination)."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_greater_than_or_equal_to:
+              value: 3 # Based on HAVING COUNT(*) >= 3 in CTEs
+
+      - name: avg_conversion_rate
+        description: "The average Conversion Rate for the aggregation group. Populated for 'exact_duration_performance' and potentially other future analysis types."
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              # max_value: 1
+              config:
+                where: "analysis_type = 'exact_duration_performance'"
+
+      - name: avg_roi
+        description: "The average Return on Investment (ROI) for the aggregation group. Populated for 'exact_duration_performance' and potentially other future analysis types."
+        # No range test, as ROI can be negative or positive.
+        # tests:
+        #   - not_null:
+        #       config:
+        #         where: "analysis_type = 'exact_duration_performance'"
+
+      - name: avg_acquisition_cost
+        description: "The average Acquisition Cost for the aggregation group. Populated for 'exact_duration_performance' and potentially other future analysis types."
+        tests:
+          - dbt_expectations.expect_column_values_to_be_positive:
+              config:
+                where: "analysis_type = 'exact_duration_performance'"
+
+      - name: avg_ctr
+        description: "The average Click-Through Rate (CTR) for the aggregation group. Populated for 'exact_duration_performance' and potentially other future analysis types."
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+              config:
+                where: "analysis_type = 'exact_duration_performance'"
+
+      - name: avg_roi_per_day
+        description: "The average Return on Investment (ROI) per day for the aggregation group. Populated for 'exact_duration_performance' and potentially other future analysis types."
+        # tests:
+        #   - not_null:
+        #       config:
+        #         where: "analysis_type = 'exact_duration_performance'"
+
+      - name: goal
+        description: "The campaign goal associated with the performance data. Populated only when analysis_type is 'roi_impact_analysis'."
+        tests:
+          - relationships:
+              to: ref('stg_campaigns')
+              field: Campaign_Goal
+              config:
+                where: "analysis_type = 'roi_impact_analysis'"
+
+      - name: segment
+        description: "The customer segment targeted by the campaign. Populated only when analysis_type is 'roi_impact_analysis'."
+        tests:
+          - relationships:
+              to: ref('stg_campaigns')
+              field: Customer_Segment
+              config:
+                where: "analysis_type = 'roi_impact_analysis'"
+
+      - name: channel
+        description: "The marketing channel used for the campaign. Populated only when analysis_type is 'roi_impact_analysis'."
+        tests:
+          - relationships:
+              to: ref('stg_campaigns')
+              field: Channel_Used
+              config:
+                where: "analysis_type = 'roi_impact_analysis'"
+
+      - name: duration_bucket
+        description: "The duration bucket the specific campaign group falls into. Populated only when analysis_type is 'roi_impact_analysis'."
+        tests:
+          - not_null:
+              config:
+                where: "analysis_type = 'roi_impact_analysis'"
+          - accepted_values:
+              values: ['1-7 days', '8-14 days', '15-21 days', '22-30 days', '31-45 days', '46-60 days', '60+ days']
+              quote: false
+              config:
+                where: "analysis_type = 'roi_impact_analysis'"
+
+      - name: optimal_bucket_for_goal_segment
+        description: "The identified optimal duration bucket for the specific goal-segment combination. Populated only when analysis_type is 'roi_impact_analysis'."
+        tests:
+          - accepted_values:
+              values: ['1-7 days', '8-14 days', '15-21 days', '22-30 days', '31-45 days', '46-60 days', '60+ days']
+              quote: false
+              config:
+                where: "analysis_type = 'roi_impact_analysis' AND optimal_bucket_for_goal_segment IS NOT NULL" # Only test non-null values
+
+      - name: optimal_bucket_for_goal_channel
+        description: "The identified optimal duration bucket for the specific goal-channel combination. Populated only when analysis_type is 'roi_impact_analysis'."
+        tests:
+          - accepted_values:
+              values: ['1-7 days', '8-14 days', '15-21 days', '22-30 days', '31-45 days', '46-60 days', '60+ days']
+              quote: false
+              config:
+                where: "analysis_type = 'roi_impact_analysis' AND optimal_bucket_for_goal_channel IS NOT NULL" # Only test non-null values
+
+      - name: actual_roi
+        description: "The actual average ROI achieved for the specific goal/segment/channel/duration_bucket group. Populated only when analysis_type is 'roi_impact_analysis'."
+        tests:
+          - not_null:
+              config:
+                where: "analysis_type = 'roi_impact_analysis'"
+
+      - name: optimal_roi_for_goal_segment
+        description: "The optimal average ROI identified for the specific goal-segment combination (based on the optimal duration bucket). Populated only when analysis_type is 'roi_impact_analysis'."
+        # tests:
+        #   - not_null: # Can be null if no optimal bucket was found (e.g., < 3 campaigns)
+        #       config:
+        #         where: "analysis_type = 'roi_impact_analysis' AND optimal_bucket_for_goal_segment IS NOT NULL"
+
+      - name: optimal_roi_for_goal_channel
+        description: "The optimal average ROI identified for the specific goal-channel combination (based on the optimal duration bucket). Populated only when analysis_type is 'roi_impact_analysis'."
+        # tests:
+        #   - not_null: # Can be null if no optimal bucket was found
+        #       config:
+        #         where: "analysis_type = 'roi_impact_analysis' AND optimal_bucket_for_goal_channel IS NOT NULL"
+
+      - name: potential_roi_improvement_goal_segment
+        description: "The calculated difference between the optimal ROI for the goal-segment and the actual ROI achieved in the current duration bucket (Optimal - Actual). Populated only when analysis_type is 'roi_impact_analysis'."
+        # tests:
+        #   - not_null: # Can be null if optimal ROI is null
+        #       config:
+        #         where: "analysis_type = 'roi_impact_analysis' AND optimal_roi_for_goal_segment IS NOT NULL"
+
+      - name: potential_roi_improvement_goal_channel
+        description: "The calculated difference between the optimal ROI for the goal-channel and the actual ROI achieved in the current duration bucket (Optimal - Actual). Populated only when analysis_type is 'roi_impact_analysis'."
+        # tests:
+        #   - not_null: # Can be null if optimal ROI is null
+        #       config:
+        #         where: "analysis_type = 'roi_impact_analysis' AND optimal_roi_for_goal_channel IS NOT NULL"
+
+      - name: pct_improvement_goal_segment
+        description: "The potential percentage improvement in ROI if campaigns for this goal-segment were run in the optimal duration bucket instead of the actual one. Populated only when analysis_type is 'roi_impact_analysis'."
+        # tests:
+        #   - not_null: # Can be null if optimal or actual ROI is null/zero
+        #       config:
+        #         where: "analysis_type = 'roi_impact_analysis' AND potential_roi_improvement_goal_segment IS NOT NULL AND actual_roi != 0"
+
+      - name: pct_improvement_goal_channel
+        description: "The potential percentage improvement in ROI if campaigns for this goal-channel were run in the optimal duration bucket instead of the actual one. Populated only when analysis_type is 'roi_impact_analysis'."
+        # tests:
+        #   - not_null: # Can be null if optimal or actual ROI is null/zero
+        #       config:
+        #         where: "analysis_type = 'roi_impact_analysis' AND potential_roi_improvement_goal_channel IS NOT NULL AND actual_roi != 0"
+
+      - name: is_using_optimal_duration_goal_segment
+        description: "Boolean flag indicating if the actual duration bucket for this goal-segment group matches the identified optimal duration bucket. Populated only when analysis_type is 'roi_impact_analysis'."
+        tests:
+          - not_null:
+              config:
+                where: "analysis_type = 'roi_impact_analysis'"
+
+      - name: is_using_optimal_duration_goal_channel
+        description: "Boolean flag indicating if the actual duration bucket for this goal-channel group matches the identified optimal duration bucket. Populated only when analysis_type is 'roi_impact_analysis'."
+        tests:
+          - not_null:
+              config:
+                where: "analysis_type = 'roi_impact_analysis'"

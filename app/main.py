@@ -144,7 +144,7 @@ def start_server(args=None):
         logger.warning("No Google API key found in environment. Vanna functionality will be limited.")
     
     # Log Vanna configuration from environment
-    model = os.environ.get("VANNA_MODEL", "gemini-2.5-pro-exp-03-25")
+    model = os.environ.get("VANNA_MODEL", "gemini-2.5-pro-preview-03-25")
     temp_str = os.environ.get("VANNA_TEMPERATURE", "0.2")
     logger.info(f"Vanna configuration: model={model}, temperature={temp_str}")
     
@@ -304,8 +304,11 @@ def generate_dbt_metadata(model_type=None, model_name=None, skip_existing=False,
         if not model_type:
             model_type = "all"
         
+        # Get model name from environment
+        model = os.environ.get("VANNA_MODEL", "gemini-2.5-pro-preview-03-25")
+        
         # Generate metadata
-        result = generate_metadata(model_type=model_type, model_name=model_name, skip_existing=skip_existing, vanna_json=vanna_json)
+        result = generate_metadata(model_type=model_type, model_name=model_name, llm_model=model, skip_existing=skip_existing, vanna_json=vanna_json)
         
         if result:
             logger.info("Metadata generation completed successfully")

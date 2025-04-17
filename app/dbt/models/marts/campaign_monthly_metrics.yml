@@ -1,0 +1,72 @@
+version: 2
+
+models:
+  - name: campaign_monthly_metrics
+    description: "Aggregates key campaign performance metrics from `stg_campaigns` on a monthly basis. Provides a time-series view for analyzing monthly trends, seasonality, and overall campaign effectiveness throughout the year. Used for monthly performance dashboards and seasonal analysis."
+    config:
+      materialized: table
+      tags:
+        - 'mart'
+        - 'marketing'
+        - 'performance'
+        - 'monthly'
+    columns:
+      - name: month
+        description: "The calendar month number (1-12) for which the metrics are aggregated. This serves as the primary key for this aggregated table."
+        tests:
+          - unique
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+      - name: campaign_count
+        description: "The total number of distinct campaigns active during the month."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              # No max_value assumed
+
+      - name: avg_conversion_rate
+        description: "The average conversion rate across all campaigns active during the month. Typically expressed as a decimal (e.g., 0.08 for 8%)."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              # Conversion rate could potentially exceed 1 in specific scenarios, so no max_value is set without further context.
+
+      - name: avg_roi
+        description: "The average Return on Investment (ROI) across all campaigns active during the month. Calculated as (Revenue - Cost) / Cost. Can be negative if campaigns were unprofitable."
+        tests:
+          - not_null
+          # ROI can be negative, so no min_value constraint other than not null.
+
+      - name: avg_acquisition_cost
+        description: "The average cost to acquire a customer (or desired conversion) across all campaigns active during the month."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              # Cost should not be negative.
+
+      - name: total_clicks
+        description: "The total number of clicks recorded across all campaigns during the month."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+
+      - name: total_impressions
+        description: "The total number of impressions recorded across all campaigns during the month."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+
+      - name: overall_ctr
+        description: "The overall Click-Through Rate (CTR) for the month, calculated as (Total Clicks / Total Impressions). Expressed as a decimal."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1 # CTR should theoretically be between 0 and 1
