@@ -1,0 +1,90 @@
+version: 2
+
+models:
+  - name: trend_change
+    description: >
+      This mart model analyzes monthly campaign performance trends for each company.
+      It calculates key metrics (Conversion Rate, ROI, Acquisition Cost, CTR) on a monthly basis,
+      computes 3-month moving averages to smooth out fluctuations, and then identifies
+      significant changes in the direction of these trends by comparing current moving averages
+      to those from three months prior. This helps in understanding shifts in marketing effectiveness over time.
+    config:
+      materialized: table
+      tags: ['mart', 'marketing', 'trends', 'analysis']
+    columns:
+      - name: Company
+        description: "The name of the company being analyzed."
+        tests:
+          - not_null
+          # Apply the unique combination test on one of the columns in the key
+          - dbt_utils.unique_combination_of_columns:
+              combination_of_columns:
+                - Company
+                - month
+
+      - name: month
+        description: "The calendar month number (4-12) for which the metrics are calculated. Months 1-3 are excluded due to the 3-month moving average and lag calculation requirements."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [4, 5, 6, 7, 8, 9, 10, 11, 12] # Reflects the WHERE month >= 4 filter
+
+      - name: avg_conversion_rate
+        description: "The average conversion rate for the company during the specified month."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0 # Conversion rate cannot be negative
+              # max_value: 1 # Optional: if conversion rate is strictly <= 1
+
+      - name: conversion_rate_ma
+        description: "The 3-month moving average of the conversion rate, including the current month and the two preceding months."
+        tests:
+          - not_null # Should be calculable for month >= 4
+
+      - name: prev_conversion_rate_ma
+        description: "The 3-month moving average of the conversion rate from three months prior to the current month. Used as a baseline for trend change detection."
+        # Note: This might be null if there were gaps in data 3 months prior, even with the month >= 4 filter.
+        # The CASE statement handles NULLs, so a not_null test might be too strict depending on data completeness.
+
+      - name: conversion_rate_trend_change
+        description: "Indicator of a change in the conversion rate trend. 1 indicates an upward trend change (current MA > previous MA and prior month's MA was <= previous MA), -1 indicates a downward trend change (current MA < previous MA and prior month's MA was >= previous MA), 0 indicates no significant change in trend direction."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [-1, 0, 1]
+
+      - name: roi_trend_change
+        description: "Indicator of a change in the Return on Investment (ROI) trend. 1 indicates an upward trend change, -1 indicates a downward trend change, 0 indicates no significant change."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [-1, 0, 1]
+
+      - name: acquisition_cost_trend_change
+        description: "Indicator of a change in the Acquisition Cost trend. Note: Lower cost is better. 1 indicates a downward (positive) trend change in cost, -1 indicates an upward (negative) trend change in cost, 0 indicates no significant change."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [-1, 0, 1]
+
+      - name: ctr_trend_change
+        description: "Indicator of a change in the Click-Through Rate (CTR) trend. 1 indicates an upward trend change, -1 indicates a downward trend change, 0 indicates no significant change."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [-1, 0, 1]
+
+      - name: has_trend_change
+        description: "A boolean flag indicating whether any of the monitored metrics (Conversion Rate, ROI, Acquisition Cost, CTR) experienced a trend change in the specified month for the company."
+        tests:
+          - not_null
+          - accepted_values: # Good practice for boolean flags
+              values: [true, false]
+
+    # Example of relationship test (though less common for aggregated marts like this)
+    # If you wanted to ensure every Company in this table exists in stg_campaigns:
+    # tests:
+    #   - relationships:
+    #       to: ref('stg_campaigns')
+    #       field: Company # Assuming 'Company' exists and is consistent in stg_campaigns

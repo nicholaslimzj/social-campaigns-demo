@@ -109,15 +109,15 @@ matrix_with_performance AS (
         sm.segment_avg_ctr,
         
         -- Global averages
-        glob.global_avg_conversion_rate,
-        glob.global_avg_roi,
-        glob.global_avg_acquisition_cost,
-        glob.global_avg_ctr
+        g_metrics.global_avg_conversion_rate,
+        g_metrics.global_avg_roi,
+        g_metrics.global_avg_acquisition_cost,
+        g_metrics.global_avg_ctr
     FROM complete_matrix cm
     LEFT JOIN goal_segment_performance gsp ON cm.goal = gsp.goal AND cm.segment = gsp.segment
     LEFT JOIN goal_metrics gm ON cm.goal = gm.goal
     LEFT JOIN segment_metrics sm ON cm.segment = sm.segment
-    CROSS JOIN global_metrics glob
+    CROSS JOIN global_metrics AS g_metrics
 ),
 
 -- Calculate relative performance metrics

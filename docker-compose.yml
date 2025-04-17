@@ -13,6 +13,7 @@ services:
       - ./dataset:/dataset
       # Mount requirements and entrypoint files
       - ./requirements.txt:/requirements.txt
+      - ./requirements-dev.txt:/requirements-dev.txt
       - ./entrypoint.sh:/entrypoint.sh
       - ./index.py:/index.py
       # Mount environment files
@@ -61,6 +62,7 @@ services:
       - ./data:/data
       - ./dataset:/dataset
       - ./requirements.txt:/requirements.txt
+      - ./requirements-dev.txt:/requirements-dev.txt
       - ./entrypoint.sh:/entrypoint.sh
       - ./index.py:/index.py
       - ./.env:/.env

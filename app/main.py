@@ -83,7 +83,6 @@ def check_environment():
             logger.info(f"Creating directory: {dir_path}")
             dir_path.mkdir(parents=True, exist_ok=True)
     
-    logger.info(f"Found data file: {csv_file}")
     logger.info("Environment check completed successfully")
     return True
 
@@ -274,6 +273,54 @@ def start_vanna(command=None):
         logger.error("Vanna module not found. Install with 'pip install vanna'")
         return False
 
+def generate_dbt_metadata(model_type=None, model_name=None, skip_existing=False, vanna_json=False):
+    """
+    Generate metadata for dbt models using LLM.
+    
+    Args:
+        model_type: Type of models to process ("all", "staging", or "marts")
+        model_name: Name of a specific model to process (optional)
+        skip_existing: If True, skip models that already have YAML files
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    logger.info(f"Generating metadata for dbt models: type={model_type or 'all'}, model={model_name or 'all'}")
+    
+    if not check_environment():
+        return False
+    
+    try:
+        # Import the metadata generator module
+        from app.scripts.metadata_generator import generate_metadata
+        
+        # Get API key from environment
+        api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            logger.error("No API key found in environment. Set OPENAI_API_KEY or GOOGLE_API_KEY.")
+            return False
+        
+        # Set default model type if not specified
+        if not model_type:
+            model_type = "all"
+        
+        # Generate metadata
+        result = generate_metadata(model_type=model_type, model_name=model_name, skip_existing=skip_existing, vanna_json=vanna_json)
+        
+        if result:
+            logger.info("Metadata generation completed successfully")
+        else:
+            logger.error("Metadata generation failed")
+        
+        return result
+    except ImportError as e:
+        logger.error(f"Error importing metadata generator: {e}")
+        logger.error("Make sure required packages are installed: pip install langchain-core langchain-google-genai pydantic pyyaml")
+        return False
+    except Exception as e:
+        logger.error(f"Error generating metadata: {e}")
+        return False
+
 def main():
     """
     Main function that runs when the application starts.
@@ -283,6 +330,10 @@ def main():
     # Parse command line arguments
     command = "check"  # Default command
     subcommand = None  # For vanna subcommands
+    model_type = None  # For metadata subcommands
+    model_name = None  # For metadata specific model
+    skip_existing = False  # For metadata skip existing flag
+    vanna_json = False  # For Vanna JSON export
     
     if len(sys.argv) > 1:
         command = sys.argv[1].lower()
@@ -290,6 +341,30 @@ def main():
         # Check for vanna subcommands
         if command == "vanna" and len(sys.argv) > 2:
             subcommand = sys.argv[2].lower()
+        
+        # Check for metadata subcommands
+        if command == "metadata" and len(sys.argv) > 2:
+            # Check for flags first
+            args = sys.argv[2:]
+            if "--skip-existing" in args:
+                skip_existing = True
+                args.remove("--skip-existing")
+            if "--vanna-json" in args:
+                vanna_json = True
+                args.remove("--vanna-json")
+            
+            # Now process the remaining arguments
+            if args:
+                # Check if it's a model type or specific model
+                arg = args[0].lower()
+                if arg in ["all", "staging", "marts"]:
+                    model_type = arg
+                    # Check if there's also a model name
+                    if len(args) > 1:
+                        model_name = args[1]
+                else:
+                    # Assume it's a model name
+                    model_name = arg
     
     # Execute the requested command
     if command == "check":
@@ -313,10 +388,13 @@ def main():
         else:
             # Default to interactive mode
             start_vanna()
+    elif command == "metadata":
+        generate_dbt_metadata(model_type=model_type, model_name=model_name, skip_existing=skip_existing, vanna_json=vanna_json)
     else:
         logger.error(f"Unknown command: {command}")
-        logger.info("Available commands: check, process, dbt, dashboard, serve, vanna")
+        logger.info("Available commands: check, process, dbt, dashboard, serve, vanna, metadata")
         logger.info("Vanna subcommands: vanna train, vanna query, vanna view-training")
+        logger.info("Metadata subcommands: metadata [--skip-existing] [--vanna-json] [all|staging|marts] [model_name]")
     
     logger.info("Meta Demo application completed")
 

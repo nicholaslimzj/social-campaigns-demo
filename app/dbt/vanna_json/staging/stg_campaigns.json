@@ -1,0 +1,198 @@
+{
+  "name": "stg_campaigns",
+  "description": "Staging model for marketing campaign data. Includes campaign attributes, performance metrics, and derived calculations like CTR, CPC, and ROAS. This model cleans and standardizes data sourced from processed Parquet files.",
+  "columns": [
+    {
+      "name": "Campaign_ID",
+      "type": "BIGINT",
+      "description": "Unique identifier for each marketing campaign.",
+      "tests": [
+        "not_null",
+        "unique"
+      ],
+      "tags": []
+    },
+    {
+      "name": "Target_Audience",
+      "type": "VARCHAR",
+      "description": "Description of the intended audience for the campaign (e.g., 'Women 45-60', 'Men 45-60', 'All Ages').",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "Campaign_Goal",
+      "type": "VARCHAR",
+      "description": "The primary objective of the campaign (e.g., 'Product Launch', 'Brand Awareness', 'Increase Sales').",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "Duration",
+      "type": "BIGINT",
+      "description": "The length of the campaign in days.",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "Channel_Used",
+      "type": "VARCHAR",
+      "description": "The marketing channel used for the campaign (e.g., 'Pinterest', 'Twitter', 'Instagram').",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "Conversion_Rate",
+      "type": "DOUBLE",
+      "description": "The rate at which campaign interactions resulted in a desired action (e.g., purchase, sign-up), expressed as a decimal.",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "Acquisition_Cost",
+      "type": "DOUBLE",
+      "description": "The total cost spent to acquire a new customer or achieve the campaign goal for the period.",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "ROI",
+      "type": "DOUBLE",
+      "description": "Return on Investment for the campaign, calculated as (Gain from Investment - Cost of Investment) / Cost of Investment.",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "Location",
+      "type": "VARCHAR",
+      "description": "The geographical location targeted or associated with the campaign.",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "Language",
+      "type": "VARCHAR",
+      "description": "The language used in the campaign creative or targeting.",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "Clicks",
+      "type": "BIGINT",
+      "description": "The total number of clicks recorded for the campaign.",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "Impressions",
+      "type": "BIGINT",
+      "description": "The total number of times the campaign creative was displayed.",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "Engagement_Score",
+      "type": "DOUBLE",
+      "description": "A metric indicating the level of user interaction with the campaign (interpretation depends on source system).",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "Customer_Segment",
+      "type": "VARCHAR",
+      "description": "The specific customer segment targeted by the campaign (e.g., 'Fashion').",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "Date",
+      "type": "TIMESTAMP_NS",
+      "description": "The original date associated with the campaign record or event (Timestamp with Nanoseconds).",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "Company",
+      "type": "VARCHAR",
+      "description": "The company running the campaign.",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "CTR",
+      "type": "FLOAT",
+      "description": "Derived Metric: Click-Through Rate, calculated as (Clicks / Impressions).",
+      "tests": [
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "CPC",
+      "type": "DOUBLE",
+      "description": "Derived Metric: Cost Per Click, calculated as (Acquisition_Cost / Clicks).",
+      "tests": [
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "ROAS",
+      "type": "DOUBLE",
+      "description": "Derived Metric: Return On Ad Spend. Often calculated as Revenue / Ad Spend. Based on sample data, appears related to ROI (ROAS = ROI + 1).",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "StandardizedDate",
+      "type": "TIMESTAMP_NS",
+      "description": "Derived Metric: A standardized date/timestamp field derived from the original 'Date' column, potentially timezone-adjusted or truncated (Timestamp with Nanoseconds).",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    }
+  ],
+  "tags": []
+}

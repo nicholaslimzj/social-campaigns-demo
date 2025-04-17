@@ -1,0 +1,313 @@
+version: 2
+
+models:
+  - name: campaign_performance_matrix
+    description: |
+      This mart model creates a performance matrix that cross-tabulates campaign goals against customer segments.
+      It provides a comprehensive view of which goal-segment combinations perform best across key metrics:
+      Conversion Rate, ROI, Acquisition Cost, and CTR.
+      The model calculates absolute performance, relative performance against goal/segment/global averages,
+      ranks combinations, computes normalized scores, and identifies top performers and untested combinations.
+      It helps identify the most effective targeting strategies and highlights opportunities for optimization.
+    config:
+      materialized: table
+      tags: ['mart', 'marketing', 'performance', 'campaign_analysis']
+    columns:
+      - name: goal
+        description: "The specific objective of the campaigns being analyzed (e.g., 'Product Launch', 'Brand Awareness'). This forms one dimension of the matrix."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_campaigns')
+              field: campaign_goal # Assuming 'campaign_goal' is the column name in stg_campaigns
+          - dbt_utils.unique_combination_of_columns:
+              combination_of_columns:
+                - goal
+                - segment
+        meta:
+          data_type: VARCHAR
+
+      - name: segment
+        description: "The customer segment targeted by the campaigns (e.g., 'Technology', 'Fashion'). This forms the other dimension of the matrix."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_campaigns')
+              field: customer_segment # Assuming 'customer_segment' is the column name in stg_campaigns
+        meta:
+          data_type: VARCHAR
+
+      - name: campaign_count
+        description: "The total number of campaigns associated with this specific goal-segment combination."
+        tests:
+          - not_null
+          # Check if count is non-negative
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+        meta:
+          data_type: BIGINT
+
+      - name: avg_conversion_rate
+        description: "The average conversion rate achieved by campaigns for this goal-segment combination. Higher is generally better."
+        meta:
+          data_type: DOUBLE
+
+      - name: avg_roi
+        description: "The average Return on Investment (ROI) for campaigns targeting this goal-segment combination. Higher is better."
+        meta:
+          data_type: DOUBLE
+
+      - name: avg_acquisition_cost
+        description: "The average cost to acquire a customer (or achieve the conversion goal) for this goal-segment combination. Lower is generally better."
+        meta:
+          data_type: DOUBLE
+
+      - name: avg_ctr
+        description: "The average Click-Through Rate (CTR) for campaigns targeting this goal-segment combination, indicating engagement. Higher is generally better."
+        meta:
+          data_type: FLOAT
+
+      - name: conversion_rate_vs_goal_avg
+        description: "The percentage difference between this combination's average conversion rate and the average conversion rate for all campaigns with the same goal. Positive values indicate performance above the goal average."
+        meta:
+          data_type: DOUBLE
+
+      - name: roi_vs_goal_avg
+        description: "The percentage difference between this combination's average ROI and the average ROI for all campaigns with the same goal. Positive values indicate performance above the goal average."
+        meta:
+          data_type: DOUBLE
+
+      - name: acquisition_cost_vs_goal_avg
+        description: "The relative performance of this combination's average acquisition cost compared to the average for the same goal. Calculated as (Goal Avg Cost / Combination Avg Cost) - 1. Positive values indicate lower (better) cost than the goal average."
+        meta:
+          data_type: DOUBLE
+
+      - name: ctr_vs_goal_avg
+        description: "The percentage difference between this combination's average CTR and the average CTR for all campaigns with the same goal. Positive values indicate performance above the goal average."
+        meta:
+          data_type: FLOAT
+
+      - name: conversion_rate_vs_segment_avg
+        description: "The percentage difference between this combination's average conversion rate and the average conversion rate for all campaigns targeting the same segment. Positive values indicate performance above the segment average."
+        meta:
+          data_type: DOUBLE
+
+      - name: roi_vs_segment_avg
+        description: "The percentage difference between this combination's average ROI and the average ROI for all campaigns targeting the same segment. Positive values indicate performance above the segment average."
+        meta:
+          data_type: DOUBLE
+
+      - name: acquisition_cost_vs_segment_avg
+        description: "The relative performance of this combination's average acquisition cost compared to the average for the same segment. Calculated as (Segment Avg Cost / Combination Avg Cost) - 1. Positive values indicate lower (better) cost than the segment average."
+        meta:
+          data_type: DOUBLE
+
+      - name: ctr_vs_segment_avg
+        description: "The percentage difference between this combination's average CTR and the average CTR for all campaigns targeting the same segment. Positive values indicate performance above the segment average."
+        meta:
+          data_type: FLOAT
+
+      - name: conversion_rate_vs_global_avg
+        description: "The percentage difference between this combination's average conversion rate and the global average conversion rate across all campaigns. Positive values indicate performance above the global average."
+        meta:
+          data_type: DOUBLE
+
+      - name: roi_vs_global_avg
+        description: "The percentage difference between this combination's average ROI and the global average ROI across all campaigns. Positive values indicate performance above the global average."
+        meta:
+          data_type: DOUBLE
+
+      - name: acquisition_cost_vs_global_avg
+        description: "The relative performance of this combination's average acquisition cost compared to the global average. Calculated as (Global Avg Cost / Combination Avg Cost) - 1. Positive values indicate lower (better) cost than the global average."
+        meta:
+          data_type: DOUBLE
+
+      - name: ctr_vs_global_avg
+        description: "The percentage difference between this combination's average CTR and the global average CTR across all campaigns. Positive values indicate performance above the global average."
+        meta:
+          data_type: FLOAT
+
+      - name: conversion_rate_rank
+        description: "Overall rank of this goal-segment combination based on average conversion rate (descending). Rank 1 is the best."
+        tests:
+          - not_null
+        meta:
+          data_type: BIGINT
+
+      - name: conversion_rate_rank_within_goal
+        description: "Rank of this combination's average conversion rate compared to other segments within the same goal (descending). Rank 1 is the best within the goal."
+        tests:
+          - not_null
+        meta:
+          data_type: BIGINT
+
+      - name: conversion_rate_rank_within_segment
+        description: "Rank of this combination's average conversion rate compared to other goals within the same segment (descending). Rank 1 is the best within the segment."
+        tests:
+          - not_null
+        meta:
+          data_type: BIGINT
+
+      - name: roi_rank
+        description: "Overall rank of this goal-segment combination based on average ROI (descending). Rank 1 is the best."
+        tests:
+          - not_null
+        meta:
+          data_type: BIGINT
+
+      - name: roi_rank_within_goal
+        description: "Rank of this combination's average ROI compared to other segments within the same goal (descending). Rank 1 is the best within the goal."
+        tests:
+          - not_null
+        meta:
+          data_type: BIGINT
+
+      - name: roi_rank_within_segment
+        description: "Rank of this combination's average ROI compared to other goals within the same segment (descending). Rank 1 is the best within the segment."
+        tests:
+          - not_null
+        meta:
+          data_type: BIGINT
+
+      - name: acquisition_cost_rank
+        description: "Overall rank of this goal-segment combination based on average acquisition cost (ascending). Rank 1 is the best (lowest cost)."
+        tests:
+          - not_null
+        meta:
+          data_type: BIGINT
+
+      - name: acquisition_cost_rank_within_goal
+        description: "Rank of this combination's average acquisition cost compared to other segments within the same goal (ascending). Rank 1 is the best (lowest cost) within the goal."
+        tests:
+          - not_null
+        meta:
+          data_type: BIGINT
+
+      - name: acquisition_cost_rank_within_segment
+        description: "Rank of this combination's average acquisition cost compared to other goals within the same segment (ascending). Rank 1 is the best (lowest cost) within the segment."
+        tests:
+          - not_null
+        meta:
+          data_type: BIGINT
+
+      - name: ctr_rank
+        description: "Overall rank of this goal-segment combination based on average CTR (descending). Rank 1 is the best."
+        tests:
+          - not_null
+        meta:
+          data_type: BIGINT
+
+      - name: ctr_rank_within_goal
+        description: "Rank of this combination's average CTR compared to other segments within the same goal (descending). Rank 1 is the best within the goal."
+        tests:
+          - not_null
+        meta:
+          data_type: BIGINT
+
+      - name: ctr_rank_within_segment
+        description: "Rank of this combination's average CTR compared to other goals within the same segment (descending). Rank 1 is the best within the segment."
+        tests:
+          - not_null
+        meta:
+          data_type: BIGINT
+
+      - name: conversion_rate_score
+        description: "Normalized score (0-1) based on the overall conversion rate rank. Higher score indicates better relative performance."
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+              # Allow nulls if rank is null (though rank has not_null test)
+              # strictly: true # Set to false if nulls are possible and acceptable
+        meta:
+          data_type: DOUBLE
+
+      - name: roi_score
+        description: "Normalized score (0-1) based on the overall ROI rank. Higher score indicates better relative performance."
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+        meta:
+          data_type: DOUBLE
+
+      - name: acquisition_cost_score
+        description: "Normalized score (0-1) based on the overall acquisition cost rank (lower cost = higher score). Higher score indicates better relative performance."
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+        meta:
+          data_type: DOUBLE
+
+      - name: ctr_score
+        description: "Normalized score (0-1) based on the overall CTR rank. Higher score indicates better relative performance."
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+        meta:
+          data_type: DOUBLE
+
+      - name: composite_score
+        description: "A weighted score combining the normalized scores for conversion rate (30%), ROI (40%), acquisition cost (20%), and CTR (10%). Provides an overall performance indicator for the goal-segment combination."
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+        meta:
+          data_type: DOUBLE
+
+      - name: is_high_conversion
+        description: "Flag indicating if the combination's average conversion rate is more than 10% above the global average."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [True, False]
+        meta:
+          data_type: BOOLEAN
+
+      - name: is_high_roi
+        description: "Flag indicating if the combination's average ROI is more than 10% above the global average."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [True, False]
+        meta:
+          data_type: BOOLEAN
+
+      - name: is_cost_efficient
+        description: "Flag indicating if the combination's average acquisition cost performance is more than 10% better (lower cost) than the global average (i.e., acquisition_cost_vs_global_avg > 0.1)."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [True, False]
+        meta:
+          data_type: BOOLEAN
+
+      - name: is_high_engagement
+        description: "Flag indicating if the combination's average CTR is more than 10% above the global average."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [True, False]
+        meta:
+          data_type: BOOLEAN
+
+      - name: is_top_performer
+        description: "Flag indicating if this goal-segment combination ranks in the top 10% based on the composite score."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [True, False]
+        meta:
+          data_type: BOOLEAN
+
+      - name: is_untested_combination
+        description: "Flag indicating if this goal-segment combination had zero associated campaigns in the source data (campaign_count = 0)."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [True, False]
+        meta:
+          data_type: BOOLEAN

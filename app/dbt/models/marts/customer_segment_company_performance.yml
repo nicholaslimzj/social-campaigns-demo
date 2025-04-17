@@ -1,0 +1,197 @@
+version: 2
+
+models:
+  - name: customer_segment_company_performance
+    description: "Aggregates campaign performance data to identify the best-performing customer segments for each company. It ranks segments within companies based on key metrics (conversion rate, ROI, acquisition cost, CTR) and compares segment performance against averages within derived company categories (e.g., Technology, Retail). This helps understand both company-specific segment strengths and how they stack up against industry peers."
+    config:
+      materialized: table
+      tags: ['mart', 'marketing', 'performance', 'segmentation']
+    columns:
+      - name: Company
+        description: "The name of the company running the marketing campaigns."
+        tests:
+          - not_null
+          # Apply the multi-column unique constraint here
+          - dbt_utils.unique_combination_of_columns:
+              combination_of_columns:
+                - Company
+                - Customer_Segment
+          - relationships:
+              to: ref('stg_campaigns')
+              field: Company
+
+      - name: company_category
+        description: "A derived category assigned to the company based on keywords in its name (e.g., Technology, Retail, Healthcare). Used for peer group analysis."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Technology', 'Food & Beverage', 'Retail', 'Financial Services', 'Healthcare', 'Other']
+
+      - name: Customer_Segment
+        description: "The specific customer segment targeted by the campaigns for the given company."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_campaigns')
+              field: Customer_Segment
+
+      - name: avg_conversion_rate
+        description: "The average conversion rate achieved across all campaigns for this specific company and customer segment."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              # Max value could theoretically exceed 1 if conversion is defined differently, but typically <= 1
+              # max_value: 1
+
+      - name: avg_roi
+        description: "The average Return on Investment (ROI) achieved across all campaigns for this specific company and customer segment."
+        tests:
+          - not_null
+          # ROI can be negative
+
+      - name: avg_acquisition_cost
+        description: "The average cost to acquire a customer (Acquisition Cost) across all campaigns for this specific company and customer segment."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+
+      - name: overall_ctr
+        description: "The overall Click-Through Rate (CTR), calculated as total clicks divided by total impressions, across all campaigns for this specific company and customer segment."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1 # CTR is typically between 0 and 1
+
+      - name: campaign_count
+        description: "The total number of campaigns run by this company targeting this specific customer segment."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1 # Must have at least one campaign to be included
+
+      - name: conversion_rate_rank
+        description: "The rank of this customer segment within the company based on average conversion rate (1 = highest conversion rate)."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1
+
+      - name: roi_rank
+        description: "The rank of this customer segment within the company based on average ROI (1 = highest ROI)."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1
+
+      - name: acquisition_cost_rank
+        description: "The rank of this customer segment within the company based on average acquisition cost (1 = lowest acquisition cost)."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1
+
+      - name: ctr_rank
+        description: "The rank of this customer segment within the company based on overall CTR (1 = highest CTR)."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1
+
+      - name: total_segments_per_company
+        description: "The total number of distinct customer segments targeted by this company across all its campaigns."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1
+
+      - name: is_best_conversion_segment
+        description: "Boolean flag indicating if this segment has the highest average conversion rate for the company (TRUE if rank = 1)."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [True, False]
+
+      - name: is_best_roi_segment
+        description: "Boolean flag indicating if this segment has the highest average ROI for the company (TRUE if rank = 1)."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [True, False]
+
+      - name: is_best_acquisition_cost_segment
+        description: "Boolean flag indicating if this segment has the lowest average acquisition cost for the company (TRUE if rank = 1)."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [True, False]
+
+      - name: is_best_ctr_segment
+        description: "Boolean flag indicating if this segment has the highest overall CTR for the company (TRUE if rank = 1)."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [True, False]
+
+      - name: category_segment_conversion_rate
+        description: "The average conversion rate for this customer segment across all companies within the same derived category."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+
+      - name: category_segment_roi
+        description: "The average ROI for this customer segment across all companies within the same derived category."
+        tests:
+          - not_null
+
+      - name: category_segment_acquisition_cost
+        description: "The average acquisition cost for this customer segment across all companies within the same derived category."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+
+      - name: category_segment_ctr
+        description: "The average overall CTR for this customer segment across all companies within the same derived category."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1 # CTR is typically between 0 and 1
+
+      - name: category_conversion_rate_rank
+        description: "The rank of this customer segment within its company category based on average conversion rate (1 = highest)."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1
+
+      - name: category_roi_rank
+        description: "The rank of this customer segment within its company category based on average ROI (1 = highest)."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1
+
+      - name: conversion_rate_vs_category_avg
+        description: "The company segment's average conversion rate relative to the category average for that segment (e.g., 0.1 means 10% higher than category average). Calculated as (Company Avg / Category Avg) - 1."
+        tests:
+          - not_null
+
+      - name: roi_vs_category_avg
+        description: "The company segment's average ROI relative to the category average for that segment (e.g., -0.05 means 5% lower than category average). Calculated as (Company Avg / Category Avg) - 1."
+        tests:
+          - not_null
+
+      - name: acquisition_cost_vs_category_avg
+        description: "How much lower the company segment's average acquisition cost is compared to the category average (e.g., 0.1 means the company's cost is ~9% lower than the category average). Calculated as (Category Avg / Company Avg) - 1. A positive value indicates better performance (lower cost) than the category average."
+        tests:
+          - not_null
+
+      - name: ctr_vs_category_avg
+        description: "The company segment's overall CTR relative to the category average for that segment (e.g., 0.15 means 15% higher than category average). Calculated as (Company Avg / Category Avg) - 1."
+        tests:
+          - not_null

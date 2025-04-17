@@ -1,0 +1,142 @@
+version: 2
+
+models:
+  - name: stg_campaigns
+    description: "Staging model for marketing campaign data. Includes campaign attributes, performance metrics, and derived calculations like CTR, CPC, and ROAS. This model cleans and standardizes data sourced from processed Parquet files."
+    config:
+      materialized: view
+      tags:
+        - 'staging'
+        - 'marketing'
+    meta:
+      source: 'Processed Parquet files located at DATA_ROOT()/processed/*/*/data.parquet'
+    columns:
+      - name: Campaign_ID
+        description: "Unique identifier for each marketing campaign."
+        tests:
+          - not_null
+          - unique
+
+      - name: Target_Audience
+        description: "Description of the intended audience for the campaign (e.g., 'Women 45-60', 'Men 45-60', 'All Ages')."
+        tests:
+          - not_null
+
+      - name: Campaign_Goal
+        description: "The primary objective of the campaign (e.g., 'Product Launch', 'Brand Awareness', 'Increase Sales')."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Product Launch', 'Brand Awareness', 'Increase Sales'] # Based on sample, extend if more known values exist
+
+      - name: Duration
+        description: "The length of the campaign in days."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1 # Duration should be at least 1 day
+
+      - name: Channel_Used
+        description: "The marketing channel used for the campaign (e.g., 'Pinterest', 'Twitter', 'Instagram')."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Pinterest', 'Twitter', 'Instagram', 'Facebook'] # Based on sample, extend if more known values exist
+
+      - name: Conversion_Rate
+        description: "The rate at which campaign interactions resulted in a desired action (e.g., purchase, sign-up), expressed as a decimal."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1 # Conversion rate should be between 0% and 100%
+
+      - name: Acquisition_Cost
+        description: "The total cost spent to acquire a new customer or achieve the campaign goal for the period."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0 # Cost cannot be negative
+
+      - name: ROI
+        description: "Return on Investment for the campaign, calculated as (Gain from Investment - Cost of Investment) / Cost of Investment."
+        tests:
+          - not_null
+
+      - name: Location
+        description: "The geographical location targeted or associated with the campaign."
+        tests:
+          - not_null
+
+      - name: Language
+        description: "The language used in the campaign creative or targeting."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['English', 'French', 'Spanish'] # Based on sample, extend if more known values exist
+
+      - name: Clicks
+        description: "The total number of clicks recorded for the campaign."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0 # Clicks cannot be negative
+
+      - name: Impressions
+        description: "The total number of times the campaign creative was displayed."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0 # Impressions cannot be negative
+          # Optional: Add relationship test if business logic dictates Impressions >= Clicks
+          # - dbt_utils.expression_is_true:
+          #     expression: ">= Clicks"
+
+      - name: Engagement_Score
+        description: "A metric indicating the level of user interaction with the campaign (interpretation depends on source system)."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0 # Assuming engagement score cannot be negative
+
+      - name: Customer_Segment
+        description: "The specific customer segment targeted by the campaign (e.g., 'Fashion')."
+        tests:
+          - not_null
+
+      - name: Date
+        description: "The original date associated with the campaign record or event (Timestamp with Nanoseconds)."
+        tests:
+          - not_null
+
+      - name: Company
+        description: "The company running the campaign."
+        tests:
+          - not_null
+
+      - name: CTR
+        description: "Derived Metric: Click-Through Rate, calculated as (Clicks / Impressions)."
+        tests:
+          # CTR can be null if Impressions is 0, so no not_null test unless handled in macro
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1 # CTR should be between 0% and 100%
+
+      - name: CPC
+        description: "Derived Metric: Cost Per Click, calculated as (Acquisition_Cost / Clicks)."
+        tests:
+          # CPC can be null if Clicks is 0, so no not_null test unless handled in macro
+          - dbt_utils.accepted_range:
+              min_value: 0 # Cost per click cannot be negative
+
+      - name: ROAS
+        description: "Derived Metric: Return On Ad Spend. Often calculated as Revenue / Ad Spend. Based on sample data, appears related to ROI (ROAS = ROI + 1)."
+        tests:
+          - not_null # Assuming ROI is always calculated and non-null
+          - dbt_utils.accepted_range:
+              min_value: 0 # ROAS should generally be non-negative if defined as Revenue/Spend
+
+      - name: StandardizedDate
+        description: "Derived Metric: A standardized date/timestamp field derived from the original 'Date' column, potentially timezone-adjusted or truncated (Timestamp with Nanoseconds)."
+        tests:
+          - not_null

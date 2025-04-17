@@ -140,7 +140,7 @@ seasonal_factors AS (
         -- Calculate seasonal index (current value / moving average)
         AVG(ta.avg_conversion_rate / NULLIF(ta.conversion_rate_ma6, 0)) AS conversion_rate_seasonal_factor,
         AVG(ta.avg_roi / NULLIF(ta.roi_ma6, 0)) AS roi_seasonal_factor,
-        AVG(ta.acquisition_cost_ma6 / NULLIF(ta.avg_acquisition_cost, 0)) AS acquisition_cost_seasonal_factor,
+        AVG(ta.acquisition_cost_ma3 / NULLIF(ta.avg_acquisition_cost, 0)) AS acquisition_cost_seasonal_factor,
         AVG(ta.avg_ctr / NULLIF(ta.ctr_ma3, 0)) AS ctr_seasonal_factor
     FROM trend_analysis ta
     WHERE ta.conversion_rate_ma6 IS NOT NULL
