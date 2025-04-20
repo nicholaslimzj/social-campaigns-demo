@@ -6,28 +6,44 @@ This document maps each visualization component in the Meta-Demo dashboard to th
 
 ### KPI Cards
 **Visualization**: Top KPI Cards (Conversion Rate, ROI, Acquisition Cost, CTR, Campaign Count)
-**API Endpoint**: `GET /api/companies/{company_id}/metrics`
+**API Endpoint**: `GET /api/companies/{company_id}/monthly_metrics`
 **Query Parameters**:
-- `include_comparison`: true (to get quarter-over-quarter comparisons)
+- `include_anomalies`: false
 **Response Format**:
 ```json
 {
-  "conversion_rate": 0.0342,
-  "conversion_rate_change": 0.05,
-  "roi": 2.7,
-  "roi_change": -0.02,
-  "acquisition_cost": 42.18,
-  "acquisition_cost_change": -0.03,
-  "ctr": 0.0215,
-  "ctr_change": 0.01,
-  "campaign_count": 24,
-  "campaign_count_change": 0.0
+  "metrics": {
+    "conversion_rate": [
+      {"month": "2024-01", "value": 0.0321, "is_anomaly": false},
+      {"month": "2024-02", "value": 0.0334, "is_anomaly": false},
+      {"month": "2024-03", "value": 0.0412, "is_anomaly": true},
+      ...
+    ],
+    "roi": [
+      {"month": "2024-01", "value": 2.4},
+      {"month": "2024-02", "value": 2.6},
+      {"month": "2024-03", "value": 2.7},
+      ...
+    ],
+    "acquisition_cost": [
+      {"month": "2024-01", "value": 43.21},
+      {"month": "2024-02", "value": 42.85},
+      {"month": "2024-03", "value": 42.18},
+      ...
+    ],
+    "ctr": [
+      {"month": "2024-01", "value": 0.0205},
+      {"month": "2024-02", "value": 0.0210},
+      {"month": "2024-03", "value": 0.0215},
+      ...
+    ]
+  }
 }
 ```
 
 ### Conversion Rate Trends
 **Visualization**: Conversion Rate Trends (Line chart with anomaly)
-**API Endpoint**: `GET /api/companies/{company_id}/monthly_company_metrics`
+**API Endpoint**: `GET /api/companies/{company_id}/monthly_metrics`
 **Query Parameters**:
 - `include_anomalies`: true
 **Response Format**:
@@ -654,7 +670,7 @@ This document maps each visualization component in the Meta-Demo dashboard to th
 
 ### Target Audience ROI Trends
 **Visualization**: Target Audience ROI Trends (Line chart)
-**API Endpoint**: `GET /api/companies/{company_id}/monthly_audience_metrics`
+**API Endpoint**: `GET /api/companies/{company_id}/audiences/monthly_metrics`
 **Response Format**:
 ```json
 {

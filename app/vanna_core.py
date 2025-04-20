@@ -98,6 +98,13 @@ class MetaVannaCore:
             def __init__(self, config=None):
                 ChromaDB_VectorStore.__init__(self, config=config)
                 GoogleGeminiChat.__init__(self, config=config)
+            
+            # Patch the str_to_approx_token_count method to handle None values
+            def str_to_approx_token_count(self, string):
+                if string is None:
+                    logger.warning("str_to_approx_token_count received None instead of a string")
+                    return 0
+                return super().str_to_approx_token_count(string)
                 
         self.vn = MyVanna(config={
             'api_key': self.api_key, 

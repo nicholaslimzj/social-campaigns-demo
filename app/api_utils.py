@@ -10,6 +10,7 @@ import logging
 import duckdb
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Union, Tuple
+from datetime import datetime, timedelta
 
 # Configure logging
 logging.basicConfig(
@@ -45,7 +46,7 @@ def get_connection() -> duckdb.DuckDBPyConnection:
         logger.error(f"Error connecting to DuckDB: {str(e)}")
         raise
 
-def execute_query(query: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+def execute_query(query: str, params: Optional[List[Any]] = None) -> List[Dict[str, Any]]:
     """
     Execute a SQL query and return the results as a list of dictionaries.
     
@@ -77,455 +78,211 @@ def execute_query(query: str, params: Optional[Dict[str, Any]] = None) -> List[D
         if 'conn' in locals():
             conn.close()
 
-def get_companies() -> List[str]:
+def get_companies() -> List[Dict[str, Any]]:
     """
     Get a list of all companies in the dataset.
     
     Returns:
-        List[str]: List of company names
+        List[Dict[str, Any]]: List of companies
     """
     query = """
-    SELECT DISTINCT Company 
-    FROM stg_campaigns
-    ORDER BY Company
+    SELECT DISTINCT
+        Company as company
+    FROM meta_analytics.main.segment_company_quarter_rankings
+    ORDER BY company
     """
     
     try:
         results = execute_query(query)
-        return [row['Company'] for row in results]
+        return results
     except Exception as e:
         logger.error(f"Error getting companies: {str(e)}")
         return []
 
-def get_company_metrics(company: Optional[str] = None) -> Union[Dict[str, Any], Dict[str, Dict[str, Any]]]:
+def get_monthly_company_metrics(company_id: str, include_anomalies: bool = False) -> Dict[str, Any]:
     """
-    Get KPI metrics for a specific company or all companies.
+    Get monthly metrics for a specific company.
     
     Args:
-        company: Optional company name to filter metrics
+        company_id: Company name to get monthly metrics for
+        include_anomalies: Whether to include anomaly detection
         
     Returns:
-        Union[Dict[str, Any], Dict[str, Dict[str, Any]]]: Metrics for one or all companies
+        Dict[str, Any]: Monthly metrics for the company
     """
-    if company:
-        query = """
-        SELECT 
-            AVG(ROI) as roi,
-            AVG(Conversion_Rate) as conversion_rate,
-            AVG(Acquisition_Cost) as acquisition_cost,
-            CAST(SUM(Clicks) AS FLOAT) / NULLIF(SUM(Impressions), 0) as ctr,
-            -- Calculate a simple engagement score (example formula)
-            (AVG(ROI) * 0.4 + AVG(Conversion_Rate) * 100 * 0.3 + 
-             CAST(SUM(Clicks) AS FLOAT) / NULLIF(SUM(Impressions), 0) * 100 * 0.3) as engagement_score
-        FROM stg_campaigns
-        WHERE Company = ?
-        """
-        results = execute_query(query, [company])
-        return results[0] if results else {}
-    else:
-        # Get metrics for all companies
-        query = """
-        SELECT 
-            Company,
-            AVG(ROI) as roi,
-            AVG(Conversion_Rate) as conversion_rate,
-            AVG(Acquisition_Cost) as acquisition_cost,
-            CAST(SUM(Clicks) AS FLOAT) / NULLIF(SUM(Impressions), 0) as ctr,
-            -- Calculate a simple engagement score (example formula)
-            (AVG(ROI) * 0.4 + AVG(Conversion_Rate) * 100 * 0.3 + 
-             CAST(SUM(Clicks) AS FLOAT) / NULLIF(SUM(Impressions), 0) * 100 * 0.3) as engagement_score
-        FROM stg_campaigns
-        GROUP BY Company
-        ORDER BY Company
-        """
-        results = execute_query(query)
+    query = """
+    SELECT 
+        month,
+        avg_conversion_rate as conversion_rate,
+        avg_roi as roi,
+        avg_acquisition_cost as acquisition_cost,
+        avg_ctr as ctr,
+        total_spend as spend,
+        total_revenue as revenue
+    FROM campaign_monthly_metrics
+    WHERE Company = ?
+    ORDER BY month
+    """
+    
+    try:
+        results = execute_query(query, [company_id])
         
-        # Convert to dictionary with company names as keys
-        metrics_by_company = {}
-        for row in results:
-            company_name = row.pop('Company')
-            metrics_by_company[company_name] = row
+        if not results:
+            return {"metrics": {}}
             
-        return metrics_by_company
-
-def get_time_series_data(company: str) -> List[Dict[str, Any]]:
-    """
-    Get time series data for a specific company.
-    
-    Args:
-        company: Company name to get time series data for
+        # Format the results into the expected structure
+        metrics = {
+            "conversion_rate": [],
+            "roi": [],
+            "acquisition_cost": [],
+            "ctr": [],
+            "spend": [],
+            "revenue": []
+        }
         
-    Returns:
-        List[Dict[str, Any]]: Time series data for the company
-    """
-    query = """
-    SELECT 
-        strftime(StandardizedDate, '%Y-%m') as date,
-        AVG(ROI) as roi,
-        AVG(Conversion_Rate) as conversion_rate,
-        AVG(Acquisition_Cost) as acquisition_cost,
-        CAST(SUM(Clicks) AS FLOAT) / NULLIF(SUM(Impressions), 0) as ctr
-    FROM stg_campaigns
-    WHERE Company = ?
-    GROUP BY strftime(StandardizedDate, '%Y-%m')
-    ORDER BY date
-    """
-    
-    return execute_query(query, [company])
-
-def get_segment_performance(company: str) -> List[Dict[str, Any]]:
-    """
-    Get segment performance for a specific company.
-    
-    Args:
-        company: Company name to get segment performance for
+        for row in results:
+            month_str = f"2022-{int(row['month']):02d}"
+            
+            metrics["conversion_rate"].append({
+                "month": month_str,
+                "value": row["conversion_rate"],
+                "is_anomaly": False  # Default value, will be updated if include_anomalies is True
+            })
+            
+            metrics["roi"].append({
+                "month": month_str,
+                "value": row["roi"]
+            })
+            
+            metrics["acquisition_cost"].append({
+                "month": month_str,
+                "value": row["acquisition_cost"]
+            })
+            
+            metrics["ctr"].append({
+                "month": month_str,
+                "value": row["ctr"]
+            })
+            
+            metrics["spend"].append({
+                "month": month_str,
+                "value": row["spend"]
+            })
+            
+            metrics["revenue"].append({
+                "month": month_str,
+                "value": row["revenue"]
+            })
         
-    Returns:
-        List[Dict[str, Any]]: Segment performance data for the company
-    """
-    query = """
-    SELECT 
-        Customer_Segment as segment,
-        AVG(ROI) as roi,
-        AVG(Conversion_Rate) as conversion_rate,
-        AVG(Acquisition_Cost) as acquisition_cost,
-        CAST(SUM(Clicks) AS FLOAT) / NULLIF(SUM(Impressions), 0) as ctr,
-        COUNT(*) as campaign_count
-    FROM stg_campaigns
-    WHERE Company = ?
-    GROUP BY Customer_Segment
-    ORDER BY roi DESC
-    """
-    
-    return execute_query(query, [company])
-
-def get_channel_performance(company: str) -> List[Dict[str, Any]]:
-    """
-    Get channel performance for a specific company.
-    
-    Args:
-        company: Company name to get channel performance for
+        response = {"metrics": metrics}
         
-    Returns:
-        List[Dict[str, Any]]: Channel performance data for the company
-    """
-    query = """
-    SELECT 
-        Channel as channel,
-        AVG(ROI) as roi,
-        AVG(Conversion_Rate) as conversion_rate,
-        AVG(Acquisition_Cost) as acquisition_cost,
-        CAST(SUM(Clicks) AS FLOAT) / NULLIF(SUM(Impressions), 0) as ctr,
-        COUNT(*) as campaign_count
-    FROM stg_campaigns
-    WHERE Company = ?
-    GROUP BY Channel
-    ORDER BY roi DESC
-    """
-    
-    return execute_query(query, [company])
-
-def get_campaign_details(company: str) -> List[Dict[str, Any]]:
-    """
-    Get campaign details for a specific company.
-    
-    Args:
-        company: Company name to get campaign details for
+        # If anomalies are requested, get them from the anomalies table
+        if include_anomalies:
+            # Query for anomalies using individual anomaly flags for each metric
+            anomaly_query = """
+            WITH anomaly_data AS (
+                -- Conversion rate anomalies
+                SELECT
+                    'conversion_rate' as metric,
+                    month,
+                    avg_conversion_rate as value,
+                    conversion_rate_z as z_score,
+                    'Conversion rate ' || CASE WHEN conversion_rate_z > 0 THEN 'higher' ELSE 'lower' END as explanation
+                FROM metrics_monthly_anomalies
+                WHERE Company = ? AND conversion_rate_anomaly = 'anomaly'
+                
+                UNION ALL
+                
+                -- ROI anomalies
+                SELECT
+                    'roi' as metric,
+                    month,
+                    avg_roi as value,
+                    roi_z as z_score,
+                    'ROI ' || CASE WHEN roi_z > 0 THEN 'higher' ELSE 'lower' END as explanation
+                FROM metrics_monthly_anomalies
+                WHERE Company = ? AND roi_anomaly = 'anomaly'
+                
+                UNION ALL
+                
+                -- Acquisition cost anomalies
+                SELECT
+                    'acquisition_cost' as metric,
+                    month,
+                    avg_acquisition_cost as value,
+                    acquisition_cost_z as z_score,
+                    'Acquisition cost ' || CASE WHEN acquisition_cost_z > 0 THEN 'higher' ELSE 'lower' END as explanation
+                FROM metrics_monthly_anomalies
+                WHERE Company = ? AND acquisition_cost_anomaly = 'anomaly'
+                
+                UNION ALL
+                
+                -- CTR anomalies
+                SELECT
+                    'ctr' as metric,
+                    month,
+                    monthly_ctr as value,
+                    ctr_z as z_score,
+                    'CTR ' || CASE WHEN ctr_z > 0 THEN 'higher' ELSE 'lower' END as explanation
+                FROM metrics_monthly_anomalies
+                WHERE Company = ? AND ctr_anomaly = 'anomaly'
+                
+                UNION ALL
+                
+                -- Spend anomalies
+                SELECT
+                    'spend' as metric,
+                    month,
+                    total_spend as value,
+                    spend_z as z_score,
+                    'Spend ' || CASE WHEN spend_z > 0 THEN 'higher' ELSE 'lower' END as explanation
+                FROM metrics_monthly_anomalies
+                WHERE Company = ? AND spend_anomaly = 'anomaly'
+                
+                UNION ALL
+                
+                -- Revenue anomalies
+                SELECT
+                    'revenue' as metric,
+                    month,
+                    total_revenue as value,
+                    revenue_z as z_score,
+                    'Revenue ' || CASE WHEN revenue_z > 0 THEN 'higher' ELSE 'lower' END as explanation
+                FROM metrics_monthly_anomalies
+                WHERE Company = ? AND revenue_anomaly = 'anomaly'
+            )
+            SELECT * FROM anomaly_data
+            ORDER BY ABS(z_score) DESC
+            """
+            
+            # Pass company_id six times, once for each subquery in the UNION ALL
+            anomaly_results = execute_query(anomaly_query, [company_id, company_id, company_id, company_id, company_id, company_id])
+            
+            if anomaly_results:
+                # Mark metrics as anomalies
+                for anomaly in anomaly_results:
+                    month_str = f"2022-{int(anomaly['month']):02d}"
+                    metric = anomaly["metric"].lower()
+                    
+                    if metric in metrics:
+                        for i, data_point in enumerate(metrics[metric]):
+                            if data_point["month"] == month_str:
+                                metrics[metric][i]["is_anomaly"] = True
+                                break
+                
+                # Add anomalies to the response
+                response["anomalies"] = [
+                    {
+                        "metric": anomaly["metric"].lower(),
+                        "month": f"2022-{int(anomaly['month']):02d}",
+                        "value": anomaly["value"],
+                        "z_score": anomaly["z_score"],
+                        "explanation": anomaly["explanation"]
+                    }
+                    for anomaly in anomaly_results
+                ]
         
-    Returns:
-        List[Dict[str, Any]]: Campaign details for the company
-    """
-    query = """
-    SELECT 
-        Campaign_ID as campaign_id,
-        Campaign_Goal as goal,
-        Channel as channel,
-        Customer_Segment as segment,
-        ROI as roi,
-        Conversion_Rate as conversion_rate,
-        Acquisition_Cost as acquisition_cost,
-        CAST(Clicks AS FLOAT) / NULLIF(Impressions, 0) as ctr,
-        Duration as duration
-    FROM stg_campaigns
-    WHERE Company = ?
-    ORDER BY StandardizedDate DESC
-    """
-    
-    return execute_query(query, [company])
-
-def get_campaign_clusters(company: str) -> List[Dict[str, Any]]:
-    """
-    Get high-performing campaign combinations for a specific company.
-    
-    Args:
-        company: Company name to get campaign clusters for
-        
-    Returns:
-        List[Dict[str, Any]]: Campaign clusters for the company
-    """
-    query = """
-    SELECT *
-    FROM campaign_historical_clusters
-    WHERE Company = ?
-    ORDER BY composite_score DESC
-    """
-    
-    return execute_query(query, [company])
-
-def get_campaign_duration_analysis(company: str) -> Dict[str, Any]:
-    """
-    Get optimal duration analysis for a specific company.
-    
-    Args:
-        company: Company name to get campaign duration analysis for
-        
-    Returns:
-        Dict[str, Any]: Campaign duration analysis for the company
-    """
-    # Get overall optimal duration
-    overall_query = """
-    SELECT 
-        optimal_duration_range as overall_optimal,
-        avg_roi as overall_roi
-    FROM campaign_duration_historical_analysis
-    WHERE Company = ? AND dimension_type = 'overall'
-    LIMIT 1
-    """
-    
-    overall_result = execute_query(overall_query, [company])
-    
-    # Get segment-specific durations
-    segment_query = """
-    SELECT 
-        dimension_value as segment,
-        optimal_duration_range,
-        avg_roi,
-        potential_roi_improvement
-    FROM campaign_duration_historical_analysis
-    WHERE Company = ? AND dimension_type = 'segment'
-    ORDER BY avg_roi DESC
-    """
-    
-    segment_results = execute_query(segment_query, [company])
-    
-    # Get channel-specific durations
-    channel_query = """
-    SELECT 
-        dimension_value as channel,
-        optimal_duration_range,
-        avg_roi,
-        potential_roi_improvement
-    FROM campaign_duration_historical_analysis
-    WHERE Company = ? AND dimension_type = 'channel'
-    ORDER BY avg_roi DESC
-    """
-    
-    channel_results = execute_query(channel_query, [company])
-    
-    # Get goal-specific durations
-    goal_query = """
-    SELECT 
-        dimension_value as goal,
-        optimal_duration_range,
-        avg_roi,
-        potential_roi_improvement
-    FROM campaign_duration_historical_analysis
-    WHERE Company = ? AND dimension_type = 'goal'
-    ORDER BY avg_roi DESC
-    """
-    
-    goal_results = execute_query(goal_query, [company])
-    
-    # Combine results
-    return {
-        "overall_optimal": overall_result[0]["overall_optimal"] if overall_result else None,
-        "overall_roi": overall_result[0]["overall_roi"] if overall_result else None,
-        "by_segment": segment_results,
-        "by_channel": channel_results,
-        "by_goal": goal_results
-    }
-
-def get_performance_matrix(company: str) -> List[Dict[str, Any]]:
-    """
-    Get goal vs segment performance matrix for a specific company.
-    
-    Args:
-        company: Company name to get performance matrix for
-        
-    Returns:
-        List[Dict[str, Any]]: Performance matrix for the company
-    """
-    query = """
-    SELECT *
-    FROM campaign_historical_performance_matrix
-    WHERE Company = ?
-    ORDER BY composite_score DESC
-    """
-    
-    return execute_query(query, [company])
-
-def get_forecasting(company: str) -> List[Dict[str, Any]]:
-    """
-    Get campaign performance forecasts for a specific company.
-    
-    Args:
-        company: Company name to get forecasts for
-        
-    Returns:
-        List[Dict[str, Any]]: Forecast data for the company
-    """
-    query = """
-    SELECT *
-    FROM campaign_future_forecast
-    WHERE Company = ?
-    ORDER BY forecast_date
-    """
-    
-    return execute_query(query, [company])
-
-def get_top_bottom_performers(company: str) -> Dict[str, List[Dict[str, Any]]]:
-    """
-    Get top and bottom performing campaigns for a specific company.
-    
-    Args:
-        company: Company name to get top/bottom performers for
-        
-    Returns:
-        Dict[str, List[Dict[str, Any]]]: Top and bottom performers for the company
-    """
-    # Get top ROI performers
-    top_roi_query = """
-    SELECT 
-        Campaign_ID as campaign_id,
-        Campaign_Goal as goal,
-        Channel as channel,
-        Customer_Segment as segment,
-        ROI as roi,
-        Conversion_Rate as conversion_rate,
-        Acquisition_Cost as acquisition_cost
-    FROM stg_campaigns
-    WHERE Company = ?
-    ORDER BY ROI DESC
-    LIMIT 5
-    """
-    
-    top_roi = execute_query(top_roi_query, [company])
-    
-    # Get bottom ROI performers
-    bottom_roi_query = """
-    SELECT 
-        Campaign_ID as campaign_id,
-        Campaign_Goal as goal,
-        Channel as channel,
-        Customer_Segment as segment,
-        ROI as roi,
-        Conversion_Rate as conversion_rate,
-        Acquisition_Cost as acquisition_cost
-    FROM stg_campaigns
-    WHERE Company = ?
-    ORDER BY ROI ASC
-    LIMIT 5
-    """
-    
-    bottom_roi = execute_query(bottom_roi_query, [company])
-    
-    # Get top conversion rate performers
-    top_conversion_query = """
-    SELECT 
-        Campaign_ID as campaign_id,
-        Campaign_Goal as goal,
-        Channel as channel,
-        Customer_Segment as segment,
-        ROI as roi,
-        Conversion_Rate as conversion_rate,
-        Acquisition_Cost as acquisition_cost
-    FROM stg_campaigns
-    WHERE Company = ?
-    ORDER BY Conversion_Rate DESC
-    LIMIT 5
-    """
-    
-    top_conversion = execute_query(top_conversion_query, [company])
-    
-    # Get bottom conversion rate performers
-    bottom_conversion_query = """
-    SELECT 
-        Campaign_ID as campaign_id,
-        Campaign_Goal as goal,
-        Channel as channel,
-        Customer_Segment as segment,
-        ROI as roi,
-        Conversion_Rate as conversion_rate,
-        Acquisition_Cost as acquisition_cost
-    FROM stg_campaigns
-    WHERE Company = ?
-    ORDER BY Conversion_Rate ASC
-    LIMIT 5
-    """
-    
-    bottom_conversion = execute_query(bottom_conversion_query, [company])
-    
-    # Get top acquisition cost performers (lowest cost)
-    top_acquisition_cost_query = """
-    SELECT 
-        Campaign_ID as campaign_id,
-        Campaign_Goal as goal,
-        Channel as channel,
-        Customer_Segment as segment,
-        ROI as roi,
-        Conversion_Rate as conversion_rate,
-        Acquisition_Cost as acquisition_cost
-    FROM stg_campaigns
-    WHERE Company = ?
-    ORDER BY Acquisition_Cost ASC
-    LIMIT 5
-    """
-    
-    top_acquisition_cost = execute_query(top_acquisition_cost_query, [company])
-    
-    # Get bottom acquisition cost performers (highest cost)
-    bottom_acquisition_cost_query = """
-    SELECT 
-        Campaign_ID as campaign_id,
-        Campaign_Goal as goal,
-        Channel as channel,
-        Customer_Segment as segment,
-        ROI as roi,
-        Conversion_Rate as conversion_rate,
-        Acquisition_Cost as acquisition_cost
-    FROM stg_campaigns
-    WHERE Company = ?
-    ORDER BY Acquisition_Cost DESC
-    LIMIT 5
-    """
-    
-    bottom_acquisition_cost = execute_query(bottom_acquisition_cost_query, [company])
-    
-    # Combine results
-    return {
-        "top_roi": top_roi,
-        "bottom_roi": bottom_roi,
-        "top_conversion": top_conversion,
-        "bottom_conversion": bottom_conversion,
-        "top_acquisition_cost": top_acquisition_cost,
-        "bottom_acquisition_cost": bottom_acquisition_cost
-    }
-
-def get_anomalies(company: str) -> List[Dict[str, Any]]:
-    """
-    Get anomaly detection with context for a specific company.
-    
-    Args:
-        company: Company name to get anomalies for
-        
-    Returns:
-        List[Dict[str, Any]]: Anomaly data for the company
-    """
-    query = """
-    SELECT *
-    FROM metrics_historical_anomalies
-    WHERE Company = ?
-    ORDER BY date DESC, abs(z_score) DESC
-    """
-    
-    return execute_query(query, [company])
+        return response
+    except Exception as e:
+        logger.error(f"Error getting monthly company metrics: {str(e)}")
+        return {"metrics": {}}

@@ -10,12 +10,13 @@ This model analyzes channel performance and efficiency to provide optimal budget
 recommendations across channels based on historical spend data.
 
 Key Features:
-1. Channel as the primary dimension
-2. Calculates key efficiency metrics (ROI, CPA, marginal returns)
-3. Determines optimal spend allocation percentages based on historical performance
-4. Provides projected performance improvements
-5. Compares optimal to current allocation
-6. Handles minimum spend requirements and maximum capacity constraints
+1. Hierarchical structure with Company as the primary dimension
+2. Channel_Used as the secondary dimension within each Company
+3. Calculates key efficiency metrics (ROI, CPA, marginal returns)
+4. Determines optimal spend allocation percentages based on historical performance
+5. Provides projected performance improvements
+6. Compares optimal to current allocation
+7. Handles minimum spend requirements and maximum capacity constraints
 
 Dashboard Usage:
 - Budget Allocation Optimizer interactive tool
@@ -33,17 +34,27 @@ date_ranges AS (
 
 -- Get current quarter data
 current_quarter_data AS (
-    SELECT *
+    SELECT 
+        Company,
+        Campaign_ID,
+        Channel_Used,
+        Date,
+        Clicks,
+        Impressions,
+        ROI,
+        Conversion_Rate,
+        Acquisition_Cost
     FROM {{ ref('stg_campaigns') }}
     WHERE EXTRACT(MONTH FROM CAST(Date AS DATE)) >= (SELECT current_max_month - 2 FROM date_ranges)
 ),
 
--- Calculate channel performance metrics
+-- Calculate channel performance metrics by aggregating campaign data
 channel_performance AS (
     SELECT
+        Company,
         Channel_Used,
-        COUNT(*) AS campaign_count,
-        COUNT(DISTINCT Company) AS company_count,
+        COUNT(DISTINCT Campaign_ID) AS campaign_count,
+        1 AS company_count, -- Since we're now grouping by company, this is always 1
         SUM(Clicks) AS total_clicks,
         SUM(Impressions) AS total_impressions,
         SUM(Clicks * Acquisition_Cost) AS total_spend,
@@ -53,12 +64,13 @@ channel_performance AS (
         AVG(Acquisition_Cost) AS avg_acquisition_cost,
         CAST(SUM(Clicks) AS FLOAT) / NULLIF(SUM(Impressions), 0) AS avg_ctr
     FROM current_quarter_data
-    GROUP BY Channel_Used
+    GROUP BY Company, Channel_Used
 ),
 
 -- Calculate channel efficiency metrics
 channel_efficiency AS (
     SELECT
+        Company,
         Channel_Used,
         campaign_count,
         company_count,
@@ -83,14 +95,14 @@ channel_efficiency AS (
             WHEN total_impressions > 0 THEN total_clicks::FLOAT / total_impressions 
             ELSE 0 
         END AS click_through_rate,
-        -- Spend share
+        -- Spend share - partitioned by company
         CASE 
-            WHEN SUM(total_spend) OVER () > 0 THEN total_spend / SUM(total_spend) OVER () 
+            WHEN SUM(total_spend) OVER (PARTITION BY Company) > 0 THEN total_spend / SUM(total_spend) OVER (PARTITION BY Company) 
             ELSE 0 
         END AS current_spend_share,
-        -- Revenue share
+        -- Revenue share - partitioned by company
         CASE 
-            WHEN SUM(total_revenue) OVER () > 0 THEN total_revenue / SUM(total_revenue) OVER () 
+            WHEN SUM(total_revenue) OVER (PARTITION BY Company) > 0 THEN total_revenue / SUM(total_revenue) OVER (PARTITION BY Company) 
             ELSE 0 
         END AS current_revenue_share
     FROM channel_performance
@@ -99,6 +111,7 @@ channel_efficiency AS (
 -- Calculate marginal returns (simplified model)
 marginal_returns AS (
     SELECT
+        Company,
         Channel_Used,
         roi_efficiency,
         -- Diminishing returns model (simplified)
@@ -131,6 +144,7 @@ marginal_returns AS (
 -- Calculate optimal spend allocation
 optimal_allocation AS (
     SELECT
+        mr.Company,
         mr.Channel_Used,
         mr.roi_efficiency,
         mr.marginal_roi,
@@ -138,30 +152,31 @@ optimal_allocation AS (
         ce.current_revenue_share,
         mr.min_spend_share,
         mr.max_spend_share,
-        -- Rank channels by marginal ROI
-        RANK() OVER (ORDER BY mr.marginal_roi DESC) AS efficiency_rank,
+        -- Rank channels by efficiency within each company
+        ROW_NUMBER() OVER (PARTITION BY mr.Company ORDER BY mr.marginal_roi DESC) AS efficiency_rank,
         -- Calculate optimal spend share (simplified model)
         -- In a real implementation, this would use a more sophisticated optimization algorithm
         CASE
             -- High efficiency channels get more budget
-            WHEN RANK() OVER (ORDER BY mr.marginal_roi DESC) = 1 THEN 
+            WHEN ROW_NUMBER() OVER (PARTITION BY mr.Company ORDER BY mr.marginal_roi DESC) = 1 THEN 
                 LEAST(mr.max_spend_share, GREATEST(mr.min_spend_share, 0.35))
-            WHEN RANK() OVER (ORDER BY mr.marginal_roi DESC) = 2 THEN 
+            WHEN ROW_NUMBER() OVER (PARTITION BY mr.Company ORDER BY mr.marginal_roi DESC) = 2 THEN 
                 LEAST(mr.max_spend_share, GREATEST(mr.min_spend_share, 0.25))
-            WHEN RANK() OVER (ORDER BY mr.marginal_roi DESC) = 3 THEN 
+            WHEN ROW_NUMBER() OVER (PARTITION BY mr.Company ORDER BY mr.marginal_roi DESC) = 3 THEN 
                 LEAST(mr.max_spend_share, GREATEST(mr.min_spend_share, 0.20))
-            WHEN RANK() OVER (ORDER BY mr.marginal_roi DESC) = 4 THEN 
+            WHEN ROW_NUMBER() OVER (PARTITION BY mr.Company ORDER BY mr.marginal_roi DESC) = 4 THEN 
                 LEAST(mr.max_spend_share, GREATEST(mr.min_spend_share, 0.15))
             ELSE 
                 LEAST(mr.max_spend_share, GREATEST(mr.min_spend_share, 0.05))
         END AS raw_optimal_share
     FROM marginal_returns mr
-    JOIN channel_efficiency ce ON mr.Channel_Used = ce.Channel_Used
+    JOIN channel_efficiency ce ON mr.Company = ce.Company AND mr.Channel_Used = ce.Channel_Used
 ),
 
 -- Normalize optimal allocation to ensure it sums to 100%
 normalized_allocation AS (
     SELECT
+        Company,
         Channel_Used,
         roi_efficiency,
         marginal_roi,
@@ -171,13 +186,14 @@ normalized_allocation AS (
         max_spend_share,
         efficiency_rank,
         raw_optimal_share,
-        -- Normalize to ensure sum is 100%
-        raw_optimal_share / SUM(raw_optimal_share) OVER () AS optimal_spend_share
+        -- Normalize to ensure sum is 100% within each company
+        raw_optimal_share / SUM(raw_optimal_share) OVER (PARTITION BY Company) AS optimal_spend_share
     FROM optimal_allocation
 )
 
 -- Final output with projected improvements
 SELECT
+    na.Company,
     na.Channel_Used,
     ce.campaign_count,
     ce.company_count,
@@ -198,8 +214,8 @@ SELECT
     na.optimal_spend_share - na.current_spend_share AS spend_share_change,
     -- Absolute spend values
     ce.total_spend AS current_spend,
-    (SELECT SUM(total_spend) FROM channel_efficiency) * na.optimal_spend_share AS optimal_spend,
-    (SELECT SUM(total_spend) FROM channel_efficiency) * na.optimal_spend_share - ce.total_spend AS spend_change,
+    (SELECT SUM(total_spend) FROM channel_efficiency WHERE Company = na.Company) * na.optimal_spend_share AS optimal_spend,
+    (SELECT SUM(total_spend) FROM channel_efficiency WHERE Company = na.Company) * na.optimal_spend_share - ce.total_spend AS spend_change,
     -- Projected improvements
     -- Simplified model assuming linear relationship with some diminishing returns
     CASE
@@ -258,5 +274,5 @@ SELECT
         ELSE 'maintain_spend'
     END AS recommendation_direction
 FROM normalized_allocation na
-JOIN channel_efficiency ce ON na.Channel_Used = ce.Channel_Used
-ORDER BY na.efficiency_rank
+JOIN channel_efficiency ce ON na.Company = ce.Company AND na.Channel_Used = ce.Channel_Used
+ORDER BY na.Company, na.efficiency_rank

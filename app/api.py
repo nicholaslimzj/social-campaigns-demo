@@ -1,26 +1,48 @@
 """
-API module for the Meta Demo project.
-Provides REST endpoints for various functionalities including Vanna.ai integration,
-campaign analytics, and performance metrics.
+API endpoints for the Meta Demo application.
+
+This module provides the API endpoints for the Meta Demo application,
+implementing the first 7 APIs from the API documentation.
 """
 
-import os
-from flask import Flask, request, jsonify, Response
-from flask_cors import CORS
-import pandas as pd
 import logging
-from typing import Dict, Any, Optional, List, Union
-import json
-from http import HTTPStatus
+import os
+from flask import Flask, Blueprint, jsonify, request
+from flask_cors import CORS
+from typing import Dict, List, Any, Optional, Union
 
+# Import Vanna core functionality
 from app.vanna_core import initialize_vanna, VANNA_AVAILABLE, GEMINI_AVAILABLE
+
 from app.api_utils import (
-    get_companies, get_company_metrics, get_time_series_data,
-    get_segment_performance, get_channel_performance, get_campaign_details,
-    get_campaign_clusters, get_campaign_duration_analysis, get_performance_matrix,
-    get_forecasting, get_top_bottom_performers, get_anomalies
+    get_companies, 
+    get_monthly_company_metrics
 )
-from app.api_docs import get_endpoint_docs, get_all_docs
+
+from app.audience_api_utils import (
+    get_company_audiences,
+    get_monthly_audience_metrics,
+    get_audience_performance_matrix,
+    get_audience_clusters,
+    get_audience_benchmarks,
+    get_audience_anomalies
+)
+
+from app.channel_api_utils import (
+    get_company_channels,
+    get_monthly_channel_metrics,
+    get_channel_performance_matrix,
+    get_channel_clusters,
+    get_channel_benchmarks,
+    get_channel_anomalies,
+    get_channel_budget_optimizer
+)
+
+from app.campaign_api_utils import (
+    get_company_goals,
+    get_monthly_campaign_metrics,
+    get_campaign_duration_analysis
+)
 
 # Configure logging
 logging.basicConfig(
@@ -32,6 +54,8 @@ logger = logging.getLogger(__name__)
 # Global variables
 vanna_instance = None
 app = None
+
+
 
 def init_app() -> Flask:
     """Initialize and return the Flask app with all routes configured."""
@@ -75,12 +99,19 @@ def init_app() -> Flask:
     
     return app
 
+# Create a Blueprint for the API
+api_blueprint = Blueprint('api', __name__)
+
 def register_routes(app: Flask) -> None:
     """Register all API routes."""
+    
+    # Register the blueprint
+    app.register_blueprint(api_blueprint, url_prefix='/api')
     
     @app.route('/api/docs', methods=['GET'])
     def api_docs():
         """API documentation endpoint."""
+        from app.api_docs import get_endpoint_docs, get_all_docs
         endpoint = request.args.get('endpoint')
         if endpoint:
             return jsonify(get_endpoint_docs(endpoint))
@@ -146,319 +177,384 @@ def register_routes(app: Flask) -> None:
             return jsonify({
                 "error": f"Failed to process question: {str(e)}"
             }), 500
+
+@api_blueprint.route('/companies', methods=['GET'])
+def companies():
+    """
+    Get a list of all companies in the dataset with metadata.
     
-    @app.route('/api/companies', methods=['GET'])
-    def get_companies_endpoint():
-        """Get list of available companies."""
-        try:
-            companies = get_companies()
-            return jsonify(companies)
-        except Exception as e:
-            logger.error(f"Error getting companies: {str(e)}")
-            return jsonify({
-                "error": f"Failed to get companies: {str(e)}"
-            }), 500
+    Returns:
+        JSON: List of companies with metadata
+    """
+    try:
+        results = get_companies()
+        return jsonify({"companies": results})
+    except Exception as e:
+        logger.error(f"Error in companies endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@api_blueprint.route('/companies/<company_id>/monthly_metrics', methods=['GET'])
+def company_monthly_metrics(company_id: str):
+    """
+    Get monthly metrics for a specific company.
     
-    @app.route('/api/insights/<company_id>', methods=['GET'])
-    def get_insights_endpoint(company_id):
-        """
-        Get AI-generated insights for a specific company.
+    Args:
+        company_id: Company name to get monthly metrics for
         
-        Path parameters:
-        - company_id: Company name to get insights for
-        """
-        try:
-            # Simple placeholder text - will be implemented with real insights later
-            insight_text = f"Based on recent performance data for {company_id}, email campaigns show higher ROI while social media channels need optimization. Consider reallocating budget to high-performing segments."
-            
-            # Return the insight as expected by the frontend
-            return jsonify({
-                "insight": insight_text
-            })
+    Returns:
+        JSON: Monthly metrics for the company
+    """
+    try:
+        # Check for query parameters
+        include_anomalies = request.args.get('include_anomalies', 'false').lower() == 'true'
         
-        except Exception as e:
-            logger.error(f"Error getting insights: {str(e)}")
-            return jsonify({
-                "error": f"Failed to get insights: {str(e)}"
-            }), 500
+        results = get_monthly_company_metrics(company_id, include_anomalies)
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in company_monthly_metrics endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@api_blueprint.route('/companies/<company_id>/audiences', methods=['GET'])
+def company_audiences(company_id: str):
+    """
+    Get list of target audiences for a specific company.
     
-    @app.route('/api/metrics/<company_id>', methods=['GET'])
-    def get_metrics_endpoint(company_id):
-        """
-        Get KPI metrics for a specific company.
+    Args:
+        company_id: Company name to get audiences for
         
-        Path parameters:
-        - company_id: Company name to get metrics for
-        """
-        try:
-            metrics = get_company_metrics(company_id)
-            if not metrics:
-                return jsonify({
-                    "error": f"Company '{company_id}' not found"
-                }), 404
-            return jsonify(metrics)
-        except Exception as e:
-            logger.error(f"Error getting metrics: {str(e)}")
-            return jsonify({
-                "error": f"Failed to get metrics: {str(e)}"
-            }), 500
+    Returns:
+        JSON: List of audiences for the company
+    """
+    try:
+        # Check for query parameters
+        include_metrics = request.args.get('include_metrics', 'false').lower() == 'true'
+        
+        results = get_company_audiences(company_id, include_metrics)
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in company_audiences endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@api_blueprint.route('/companies/<company_id>/audiences/monthly_metrics', methods=['GET'])
+def audience_monthly_metrics(company_id: str):
+    """
+    Get monthly metrics by target audience for a specific company.
     
-    @app.route('/api/time-series/<company_id>', methods=['GET'])
-    def get_time_series_endpoint(company_id):
-        """
-        Get time series data for a specific company.
+    Args:
+        company_id: Company name to get monthly audience metrics for
         
-        Path parameters:
-        - company_id: Company name to get time series data for
-        """
-        try:
-            time_series = get_time_series_data(company_id)
-            if not time_series:
-                return jsonify({
-                    "error": f"No time series data found for company '{company_id}'"
-                }), 404
-            return jsonify(time_series)
-        except Exception as e:
-            logger.error(f"Error getting time series data: {str(e)}")
-            return jsonify({
-                "error": f"Failed to get time series data: {str(e)}"
-            }), 500
+    Returns:
+        JSON: Monthly audience metrics for the company
+    """
+    try:
+        results = get_monthly_audience_metrics(company_id)
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in audience_monthly_metrics endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@api_blueprint.route('/companies/<company_id>/audiences/performance_matrix', methods=['GET'])
+def audience_performance_matrix(company_id: str):
+    """
+    Get audience performance matrix data.
     
-    @app.route('/api/segments/<company_id>', methods=['GET'])
-    def get_segments_endpoint(company_id):
-        """
-        Get segment performance for a specific company.
+    Args:
+        company_id: Company name to get performance matrix for
         
-        Path parameters:
-        - company_id: Company name to get segment performance for
-        """
-        try:
-            segments = get_segment_performance(company_id)
-            if not segments:
-                return jsonify({
-                    "error": f"No segment data found for company '{company_id}'"
-                }), 404
-            return jsonify(segments)
-        except Exception as e:
-            logger.error(f"Error getting segment performance: {str(e)}")
+    Returns:
+        JSON: Performance matrix for the company
+    """
+    try:
+        # Check for query parameters
+        dimension_type = request.args.get('dimension_type', 'goal')
+        
+        # Validate dimension_type
+        valid_dimension_types = ['goal', 'location', 'language']
+        if dimension_type not in valid_dimension_types:
             return jsonify({
-                "error": f"Failed to get segment performance: {str(e)}"
-            }), 500
-    
-    @app.route('/api/channels/<company_id>', methods=['GET'])
-    def get_channels_endpoint(company_id):
-        """
-        Get channel performance for a specific company.
-        
-        Path parameters:
-        - company_id: Company name to get channel performance for
-        """
-        try:
-            channels = get_channel_performance(company_id)
-            if not channels:
-                return jsonify({
-                    "error": f"No channel data found for company '{company_id}'"
-                }), 404
-            return jsonify(channels)
-        except Exception as e:
-            logger.error(f"Error getting channel performance: {str(e)}")
-            return jsonify({
-                "error": f"Failed to get channel performance: {str(e)}"
-            }), 500
-    
-    @app.route('/api/campaigns/<company_id>', methods=['GET'])
-    def get_campaigns_endpoint(company_id):
-        """
-        Get campaign details for a specific company.
-        
-        Path parameters:
-        - company_id: Company name to get campaign details for
-        """
-        try:
-            campaigns = get_campaign_details(company_id)
-            if not campaigns:
-                return jsonify({
-                    "error": f"No campaign data found for company '{company_id}'"
-                }), 404
-            return jsonify(campaigns)
-        except Exception as e:
-            logger.error(f"Error getting campaign details: {str(e)}")
-            return jsonify({
-                "error": f"Failed to get campaign details: {str(e)}"
-            }), 500
-    
-    @app.route('/api/campaign-clusters/<company_id>', methods=['GET'])
-    def get_campaign_clusters_endpoint(company_id):
-        """
-        Get high-performing campaign combinations for a specific company.
-        
-        Path parameters:
-        - company_id: Company name to get campaign clusters for
-        """
-        try:
-            clusters = get_campaign_clusters(company_id)
-            if not clusters:
-                return jsonify({
-                    "error": f"No campaign cluster data found for company '{company_id}'"
-                }), 404
-            return jsonify(clusters)
-        except Exception as e:
-            logger.error(f"Error getting campaign clusters: {str(e)}")
-            return jsonify({
-                "error": f"Failed to get campaign clusters: {str(e)}"
-            }), 500
-    
-    @app.route('/api/campaign-duration/<company_id>', methods=['GET'])
-    def get_campaign_duration_endpoint(company_id):
-        """
-        Get optimal duration analysis by segment/channel for a specific company.
-        
-        Path parameters:
-        - company_id: Company name to get campaign duration analysis for
-        """
-        try:
-            duration_analysis = get_campaign_duration_analysis(company_id)
-            if not duration_analysis or not duration_analysis.get("overall_optimal"):
-                return jsonify({
-                    "error": f"No campaign duration data found for company '{company_id}'"
-                }), 404
-            return jsonify(duration_analysis)
-        except Exception as e:
-            logger.error(f"Error getting campaign duration analysis: {str(e)}")
-            return jsonify({
-                "error": f"Failed to get campaign duration analysis: {str(e)}"
-            }), 500
-    
-    @app.route('/api/performance-matrix/<company_id>', methods=['GET'])
-    def get_performance_matrix_endpoint(company_id):
-        """
-        Get goal vs segment performance matrix for a specific company.
-        
-        Path parameters:
-        - company_id: Company name to get performance matrix for
-        """
-        try:
-            matrix = get_performance_matrix(company_id)
-            if not matrix:
-                return jsonify({
-                    "error": f"No performance matrix data found for company '{company_id}'"
-                }), 404
-            return jsonify(matrix)
-        except Exception as e:
-            logger.error(f"Error getting performance matrix: {str(e)}")
-            return jsonify({
-                "error": f"Failed to get performance matrix: {str(e)}"
-            }), 500
-    
-    @app.route('/api/forecasting/<company_id>', methods=['GET'])
-    def get_forecasting_endpoint(company_id):
-        """
-        Get campaign performance forecasts for a specific company.
-        
-        Path parameters:
-        - company_id: Company name to get forecasts for
-        """
-        try:
-            forecasts = get_forecasting(company_id)
-            if not forecasts:
-                return jsonify({
-                    "error": f"No forecast data found for company '{company_id}'"
-                }), 404
-            return jsonify(forecasts)
-        except Exception as e:
-            logger.error(f"Error getting forecasts: {str(e)}")
-            return jsonify({
-                "error": f"Failed to get forecasts: {str(e)}"
-            }), 500
-    
-    @app.route('/api/top-bottom/<company_id>', methods=['GET'])
-    def get_top_bottom_endpoint(company_id):
-        """
-        Get top and bottom performing campaigns for a specific company.
-        
-        Path parameters:
-        - company_id: Company name to get top/bottom performers for
-        """
-        try:
-            performers = get_top_bottom_performers(company_id)
-            if not performers or not any(performers.values()):
-                return jsonify({
-                    "error": f"No performance data found for company '{company_id}'"
-                }), 404
-            return jsonify(performers)
-        except Exception as e:
-            logger.error(f"Error getting top/bottom performers: {str(e)}")
-            return jsonify({
-                "error": f"Failed to get top/bottom performers: {str(e)}"
-            }), 500
-    
-    @app.route('/api/anomalies/<company_id>', methods=['GET'])
-    def get_anomalies_endpoint(company_id):
-        """
-        Get anomaly detection with context for a specific company.
-        
-        Path parameters:
-        - company_id: Company name to get anomalies for
-        """
-        try:
-            anomalies = get_anomalies(company_id)
-            if not anomalies:
-                return jsonify({
-                    "error": f"No anomaly data found for company '{company_id}'"
-                }), 404
-            return jsonify(anomalies)
-        except Exception as e:
-            logger.error(f"Error getting anomalies: {str(e)}")
-            return jsonify({
-                "error": f"Failed to get anomalies: {str(e)}"
-            }), 500
-            
-    # Legacy endpoint for backward compatibility
-    @app.route('/api/kpis', methods=['GET'])
-    def get_kpis():
-        """
-        Get KPIs for a specific company or all companies.
-        
-        Query parameters:
-        - company: Optional company name to filter KPIs
-        """
-        company = request.args.get('company')
-        
-        try:
-            if company:
-                metrics = get_company_metrics(company)
-                if not metrics:
-                    return jsonify({
-                        "error": f"Company '{company}' not found"
-                    }), 404
-                return jsonify(metrics)
-            else:
-                metrics_by_company = get_company_metrics()
-                return jsonify(metrics_by_company)
-        
-        except Exception as e:
-            logger.error(f"Error getting KPIs: {str(e)}")
-            return jsonify({
-                "error": f"Failed to get KPIs: {str(e)}"
-            }), 500
-    
-    # Legacy endpoint for backward compatibility
-    @app.route('/api/insights', methods=['GET'])
-    def get_insights():
-        """
-        Get AI-generated insights for a specific company.
-        
-        Query parameters:
-        - company: Company name to get insights for
-        """
-        company = request.args.get('company')
-        if not company:
-            return jsonify({
-                "error": "Missing required parameter: company"
+                "error": f"Invalid dimension_type. Must be one of: {', '.join(valid_dimension_types)}"
             }), 400
         
-        # Redirect to the new endpoint
-        return get_insights_endpoint(company)
+        results = get_audience_performance_matrix(company_id, dimension_type)
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in audience_performance_matrix endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
-# Note: The Flask app is initialized in the init_app() function
-# and the handler function is now in index.py
+@api_blueprint.route('/companies/<company_id>/audiences/clusters', methods=['GET'])
+def audience_clusters(company_id: str):
+    """
+    Get audience clustering data.
+    
+    Args:
+        company_id: Company name to get audience clusters for
+        
+    Returns:
+        JSON: Audience clusters for the company
+    """
+    try:
+        # Check for query parameters
+        min_roi = float(request.args.get('min_roi', 0))
+        min_conversion_rate = float(request.args.get('min_conversion_rate', 0))
+        
+        results = get_audience_clusters(company_id, min_roi, min_conversion_rate)
+        return jsonify(results)
+    except ValueError:
+        return jsonify({
+            "error": "Invalid parameter values. min_roi and min_conversion_rate must be valid numbers."
+        }), 400
+    except Exception as e:
+        logger.error(f"Error in audience_clusters endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@api_blueprint.route('/companies/<company_id>/audience_anomalies', methods=['GET'])
+def audience_anomalies(company_id: str):
+    """
+    Get anomalies for target audiences of a specific company.
+    
+    Args:
+        company_id: Company name to get audience anomalies for
+        
+    Returns:
+        JSON: Audience anomalies for the company
+    """
+    try:
+        # Check for query parameters
+        threshold = float(request.args.get('threshold', '2.0'))
+        
+        results = get_audience_anomalies(company_id, threshold)
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in audience_anomalies endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@api_blueprint.route('/companies/<company_id>/audiences/benchmarks', methods=['GET'])
+def audience_benchmarks(company_id: str):
+    """
+    Get audience industry benchmarks.
+    
+    Args:
+        company_id: Company name to get audience benchmarks for
+        
+    Returns:
+        JSON: Audience benchmarks for the company
+    """
+    try:
+        results = get_audience_benchmarks(company_id)
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in audience_benchmarks endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@api_blueprint.route('/companies/<company_id>/channels', methods=['GET'])
+def company_channels(company_id: str):
+    """
+    Get channels for a specific company.
+    
+    Args:
+        company_id: Company name to get channels for
+        
+    Returns:
+        JSON: Channels for the company
+    """
+    try:
+        # Check for query parameters
+        include_metrics = request.args.get('include_metrics', 'false').lower() == 'true'
+        
+        results = get_company_channels(company_id, include_metrics)
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in company_channels endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@api_blueprint.route('/companies/<company_id>/channels/monthly_metrics', methods=['GET'])
+def monthly_channel_metrics(company_id: str):
+    """
+    Get monthly metrics for channels of a specific company.
+    
+    Args:
+        company_id: Company name to get monthly channel metrics for
+        
+    Returns:
+        JSON: Monthly channel metrics for the company
+    """
+    try:
+        results = get_monthly_channel_metrics(company_id)
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in monthly_channel_metrics endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@api_blueprint.route('/companies/<company_id>/channels/performance_matrix', methods=['GET'])
+def channel_performance_matrix(company_id: str):
+    """
+    Get performance matrix for channels of a specific company.
+    
+    Args:
+        company_id: Company name to get channel performance matrix for
+        
+    Returns:
+        JSON: Channel performance matrix for the company
+    """
+    try:
+        # Check for query parameters
+        dimension_type = request.args.get('dimension_type', 'goal')
+        
+        results = get_channel_performance_matrix(company_id, dimension_type)
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in channel_performance_matrix endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@api_blueprint.route('/companies/<company_id>/channels/clusters', methods=['GET'])
+def channel_clusters(company_id: str):
+    """
+    Get channel clustering data for a specific company.
+    
+    Args:
+        company_id: Company name to get channel clusters for
+        
+    Returns:
+        JSON: Channel clusters for the company
+    """
+    try:
+        # Check for query parameters
+        min_roi = float(request.args.get('min_roi', '0'))
+        min_conversion_rate = float(request.args.get('min_conversion_rate', '0'))
+        
+        results = get_channel_clusters(company_id, min_roi, min_conversion_rate)
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in channel_clusters endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@api_blueprint.route('/companies/<company_id>/channels/benchmarks', methods=['GET'])
+def channel_benchmarks(company_id: str):
+    """
+    Get channel industry benchmarks.
+    
+    Args:
+        company_id: Company name to get channel benchmarks for
+        
+    Returns:
+        JSON: Channel benchmarks for the company
+    """
+    try:
+        results = get_channel_benchmarks(company_id)
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in channel_benchmarks endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@api_blueprint.route('/companies/<company_id>/channel_anomalies', methods=['GET'])
+def channel_anomalies(company_id: str):
+    """
+    Get anomalies for channels of a specific company.
+    
+    Args:
+        company_id: Company name to get channel anomalies for
+        
+    Returns:
+        JSON: Channel anomalies for the company
+    """
+    try:
+        # Check for query parameters
+        threshold = float(request.args.get('threshold', '2.0'))
+        
+        results = get_channel_anomalies(company_id, threshold)
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in channel_anomalies endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@api_blueprint.route('/companies/<company_id>/channel_budget_optimizer', methods=['GET'])
+def channel_budget_optimizer(company_id: str):
+    """
+    Get budget allocation optimization recommendations for channels of a specific company.
+    
+    Args:
+        company_id: Company name to get budget optimization for
+        
+    Returns:
+        JSON: Budget allocation recommendations for the company
+    """
+    try:
+        # Check for query parameters
+        total_budget = float(request.args.get('total_budget', '0'))
+        if total_budget <= 0:
+            # If no budget specified, use the sum of current spend as default
+            # This will be handled inside the get_channel_budget_optimizer function
+            pass
+            
+        optimization_goal = request.args.get('optimization_goal', 'roi')
+        
+        results = get_channel_budget_optimizer(company_id, total_budget, optimization_goal)
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in channel_budget_optimizer endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+# Campaign-level endpoints
+@api_blueprint.route('/companies/<company_id>/goals', methods=['GET'])
+def company_goals(company_id: str):
+    """
+    Get list of campaign goals for a specific company.
+    
+    Args:
+        company_id: Company name to get goals for
+        
+    Returns:
+        JSON: List of goals for the company
+    """
+    try:
+        # Check for query parameters
+        include_metrics = request.args.get('include_metrics', 'false').lower() == 'true'
+        
+        results = get_company_goals(company_id, include_metrics)
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in company_goals endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@api_blueprint.route('/companies/<company_id>/monthly_campaign_metrics', methods=['GET'])
+def monthly_campaign_metrics(company_id: str):
+    """
+    Get monthly campaign metrics for a specific company.
+    
+    Args:
+        company_id: Company name to get monthly campaign metrics for
+        
+    Returns:
+        JSON: Monthly campaign metrics for the company
+    """
+    try:
+        results = get_monthly_campaign_metrics(company_id)
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in monthly_campaign_metrics endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@api_blueprint.route('/companies/<company_id>/campaign_duration_analysis', methods=['GET'])
+def campaign_duration_analysis(company_id: str):
+    """
+    Get campaign duration impact analysis.
+    
+    Args:
+        company_id: Company name to get campaign duration analysis for
+        
+    Returns:
+        JSON: Campaign duration analysis for the company
+    """
+    try:
+        # Check for query parameters
+        dimension = request.args.get('dimension', 'audience')
+        
+        results = get_campaign_duration_analysis(company_id, dimension)
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in campaign_duration_analysis endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+

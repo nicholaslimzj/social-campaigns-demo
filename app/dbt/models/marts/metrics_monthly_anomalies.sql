@@ -31,7 +31,9 @@ WITH company_monthly_metrics AS (
         AVG(Acquisition_Cost) as avg_acquisition_cost,
         SUM(Clicks) as total_clicks,
         SUM(Impressions) as total_impressions,
-        CAST(SUM(Clicks) AS FLOAT) / NULLIF(SUM(Impressions), 0) as monthly_ctr
+        CAST(SUM(Clicks) AS FLOAT) / NULLIF(SUM(Impressions), 0) as monthly_ctr,
+        SUM(Clicks * Acquisition_Cost) as total_spend,
+        SUM(Clicks * Acquisition_Cost * ROI) as total_revenue
     FROM {{ ref('stg_campaigns') }}
     GROUP BY Company, month
     ORDER BY Company, month
@@ -48,6 +50,8 @@ rolling_stats AS (
         total_clicks,
         total_impressions,
         monthly_ctr,
+        total_spend,
+        total_revenue,
         
         -- Rolling averages (3-month window excluding current month)
         AVG(avg_conversion_rate) OVER (
@@ -86,6 +90,18 @@ rolling_stats AS (
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
         ) AS ctr_mean,
         
+        AVG(total_spend) OVER (
+            PARTITION BY Company
+            ORDER BY month
+            ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
+        ) AS spend_mean,
+        
+        AVG(total_revenue) OVER (
+            PARTITION BY Company
+            ORDER BY month
+            ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
+        ) AS revenue_mean,
+        
         -- Rolling standard deviations
         STDDEV_POP(avg_conversion_rate) OVER (
             PARTITION BY Company
@@ -121,7 +137,19 @@ rolling_stats AS (
             PARTITION BY Company
             ORDER BY month
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
-        ) AS ctr_std
+        ) AS ctr_std,
+        
+        STDDEV_POP(total_spend) OVER (
+            PARTITION BY Company
+            ORDER BY month
+            ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
+        ) AS spend_std,
+        
+        STDDEV_POP(total_revenue) OVER (
+            PARTITION BY Company
+            ORDER BY month
+            ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
+        ) AS revenue_std
     FROM company_monthly_metrics
 )
 
@@ -207,6 +235,34 @@ SELECT
         ELSE 'normal'
     END AS ctr_anomaly,
     
+    -- Spend metrics
+    total_spend,
+    spend_mean,
+    spend_std,
+    CASE
+        WHEN spend_std IS NULL OR spend_std = 0 THEN NULL
+        ELSE (total_spend - spend_mean) / spend_std
+    END AS spend_z,
+    CASE
+        WHEN spend_std IS NULL OR spend_std = 0 THEN 'normal'
+        WHEN ABS((total_spend - spend_mean) / spend_std) > 2 THEN 'anomaly'
+        ELSE 'normal'
+    END AS spend_anomaly,
+    
+    -- Revenue metrics
+    total_revenue,
+    revenue_mean,
+    revenue_std,
+    CASE
+        WHEN revenue_std IS NULL OR revenue_std = 0 THEN NULL
+        ELSE (total_revenue - revenue_mean) / revenue_std
+    END AS revenue_z,
+    CASE
+        WHEN revenue_std IS NULL OR revenue_std = 0 THEN 'normal'
+        WHEN ABS((total_revenue - revenue_mean) / revenue_std) > 2 THEN 'anomaly'
+        ELSE 'normal'
+    END AS revenue_anomaly,
+    
     -- Create a summary field for easy filtering
     CASE
         WHEN (
@@ -215,7 +271,9 @@ SELECT
             (acquisition_cost_std IS NOT NULL AND acquisition_cost_std > 0 AND ABS((avg_acquisition_cost - acquisition_cost_mean) / acquisition_cost_std) > 2) OR
             (clicks_std IS NOT NULL AND clicks_std > 0 AND ABS((total_clicks - clicks_mean) / clicks_std) > 2) OR
             (impressions_std IS NOT NULL AND impressions_std > 0 AND ABS((total_impressions - impressions_mean) / impressions_std) > 2) OR
-            (ctr_std IS NOT NULL AND ctr_std > 0 AND ABS((monthly_ctr - ctr_mean) / ctr_std) > 2)
+            (ctr_std IS NOT NULL AND ctr_std > 0 AND ABS((monthly_ctr - ctr_mean) / ctr_std) > 2) OR
+            (spend_std IS NOT NULL AND spend_std > 0 AND ABS((total_spend - spend_mean) / spend_std) > 2) OR
+            (revenue_std IS NOT NULL AND revenue_std > 0 AND ABS((total_revenue - revenue_mean) / revenue_std) > 2)
         ) THEN TRUE
         ELSE FALSE
     END AS has_anomaly

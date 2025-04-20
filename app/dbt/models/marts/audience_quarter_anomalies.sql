@@ -28,7 +28,8 @@ WITH
 -- First, determine the date range for the current quarter
 date_ranges AS (
     SELECT
-        MAX(EXTRACT(MONTH FROM CAST(Date AS DATE))) AS current_max_month
+        MAX(EXTRACT(MONTH FROM CAST(Date AS DATE))) AS current_max_month,
+        MAX(EXTRACT(MONTH FROM CAST(Date AS DATE))) / 3 + MAX(EXTRACT(YEAR FROM CAST(Date AS DATE))) * 4 AS current_quarter_id
     FROM {{ ref('stg_campaigns') }}
 ),
 
@@ -51,6 +52,8 @@ company_audience_quarter_metrics AS (
         SUM(Clicks) as total_clicks,
         SUM(Impressions) as total_impressions,
         CAST(SUM(Clicks) AS FLOAT) / NULLIF(SUM(Impressions), 0) as quarterly_ctr,
+        SUM(Clicks * Acquisition_Cost) as total_spend,
+        SUM(Clicks * Acquisition_Cost * ROI) as total_revenue,
         COUNT(DISTINCT Campaign_ID) as campaign_count
     FROM {{ ref('stg_campaigns') }}
     GROUP BY 
@@ -72,6 +75,8 @@ rolling_stats AS (
         total_clicks,
         total_impressions,
         quarterly_ctr,
+        total_spend,
+        total_revenue,
         campaign_count,
         
         -- Rolling averages (3-quarter window excluding current quarter)
@@ -117,6 +122,18 @@ rolling_stats AS (
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
         ) AS campaign_count_mean,
         
+        AVG(total_spend) OVER (
+            PARTITION BY Company, Target_Audience
+            ORDER BY quarter_id
+            ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
+        ) AS spend_mean,
+        
+        AVG(total_revenue) OVER (
+            PARTITION BY Company, Target_Audience
+            ORDER BY quarter_id
+            ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
+        ) AS revenue_mean,
+        
         -- Rolling standard deviations
         STDDEV_POP(avg_conversion_rate) OVER (
             PARTITION BY Company, Target_Audience
@@ -158,7 +175,19 @@ rolling_stats AS (
             PARTITION BY Company, Target_Audience
             ORDER BY quarter_id
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
-        ) AS campaign_count_std
+        ) AS campaign_count_std,
+        
+        STDDEV_POP(total_spend) OVER (
+            PARTITION BY Company, Target_Audience
+            ORDER BY quarter_id
+            ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
+        ) AS spend_std,
+        
+        STDDEV_POP(total_revenue) OVER (
+            PARTITION BY Company, Target_Audience
+            ORDER BY quarter_id
+            ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
+        ) AS revenue_std
     FROM company_audience_quarter_metrics
 )
 
@@ -166,7 +195,6 @@ rolling_stats AS (
 SELECT
     Company,
     Target_Audience,
-    quarter_id,
     
     -- Conversion Rate metrics
     avg_conversion_rate,
@@ -266,6 +294,34 @@ SELECT
         ELSE 'normal'
     END AS campaign_count_anomaly,
     
+    -- Spend metrics
+    total_spend,
+    spend_mean,
+    spend_std,
+    CASE
+        WHEN spend_std IS NULL OR spend_std = 0 THEN NULL
+        ELSE (total_spend - spend_mean) / spend_std
+    END AS spend_z,
+    CASE
+        WHEN spend_std IS NULL OR spend_std = 0 THEN 'normal'
+        WHEN ABS((total_spend - spend_mean) / spend_std) > 2 THEN 'anomaly'
+        ELSE 'normal'
+    END AS spend_anomaly,
+    
+    -- Revenue metrics
+    total_revenue,
+    revenue_mean,
+    revenue_std,
+    CASE
+        WHEN revenue_std IS NULL OR revenue_std = 0 THEN NULL
+        ELSE (total_revenue - revenue_mean) / revenue_std
+    END AS revenue_z,
+    CASE
+        WHEN revenue_std IS NULL OR revenue_std = 0 THEN 'normal'
+        WHEN ABS((total_revenue - revenue_mean) / revenue_std) > 2 THEN 'anomaly'
+        ELSE 'normal'
+    END AS revenue_anomaly,
+    
     -- Create a summary field for easy filtering
     CASE
         WHEN (
@@ -275,10 +331,48 @@ SELECT
             (clicks_std IS NOT NULL AND clicks_std > 0 AND ABS((total_clicks - clicks_mean) / clicks_std) > 2) OR
             (impressions_std IS NOT NULL AND impressions_std > 0 AND ABS((total_impressions - impressions_mean) / impressions_std) > 2) OR
             (ctr_std IS NOT NULL AND ctr_std > 0 AND ABS((quarterly_ctr - ctr_mean) / ctr_std) > 2) OR
-            (campaign_count_std IS NOT NULL AND campaign_count_std > 0 AND ABS((campaign_count - campaign_count_mean) / campaign_count_std) > 2)
+            (campaign_count_std IS NOT NULL AND campaign_count_std > 0 AND ABS((campaign_count - campaign_count_mean) / campaign_count_std) > 2) OR
+            (spend_std IS NOT NULL AND spend_std > 0 AND ABS((total_spend - spend_mean) / spend_std) > 2) OR
+            (revenue_std IS NOT NULL AND revenue_std > 0 AND ABS((total_revenue - revenue_mean) / revenue_std) > 2)
         ) THEN TRUE
         ELSE FALSE
     END AS has_anomaly,
+    
+    -- Anomaly severity (count of metrics with anomalies)
+    (
+        CASE WHEN conversion_rate_std IS NOT NULL AND conversion_rate_std > 0 AND ABS((avg_conversion_rate - conversion_rate_mean) / conversion_rate_std) > 2 THEN 1 ELSE 0 END +
+        CASE WHEN roi_std IS NOT NULL AND roi_std > 0 AND ABS((avg_roi - roi_mean) / roi_std) > 2 THEN 1 ELSE 0 END +
+        CASE WHEN acquisition_cost_std IS NOT NULL AND acquisition_cost_std > 0 AND ABS((avg_acquisition_cost - acquisition_cost_mean) / acquisition_cost_std) > 2 THEN 1 ELSE 0 END +
+        CASE WHEN clicks_std IS NOT NULL AND clicks_std > 0 AND ABS((total_clicks - clicks_mean) / clicks_std) > 2 THEN 1 ELSE 0 END +
+        CASE WHEN impressions_std IS NOT NULL AND impressions_std > 0 AND ABS((total_impressions - impressions_mean) / impressions_std) > 2 THEN 1 ELSE 0 END +
+        CASE WHEN ctr_std IS NOT NULL AND ctr_std > 0 AND ABS((quarterly_ctr - ctr_mean) / ctr_std) > 2 THEN 1 ELSE 0 END +
+        CASE WHEN campaign_count_std IS NOT NULL AND campaign_count_std > 0 AND ABS((campaign_count - campaign_count_mean) / campaign_count_std) > 2 THEN 1 ELSE 0 END +
+        CASE WHEN spend_std IS NOT NULL AND spend_std > 0 AND ABS((total_spend - spend_mean) / spend_std) > 2 THEN 1 ELSE 0 END +
+        CASE WHEN revenue_std IS NOT NULL AND revenue_std > 0 AND ABS((total_revenue - revenue_mean) / revenue_std) > 2 THEN 1 ELSE 0 END
+    ) AS anomaly_count,
+    
+    -- Anomaly impact (positive or negative)
+    CASE
+        WHEN (
+            -- Positive anomalies (higher is better)
+            (conversion_rate_std IS NOT NULL AND conversion_rate_std > 0 AND (avg_conversion_rate - conversion_rate_mean) / conversion_rate_std > 2) OR
+            (roi_std IS NOT NULL AND roi_std > 0 AND (avg_roi - roi_mean) / roi_std > 2) OR
+            (ctr_std IS NOT NULL AND ctr_std > 0 AND (quarterly_ctr - ctr_mean) / ctr_std > 2) OR
+            (revenue_std IS NOT NULL AND revenue_std > 0 AND (total_revenue - revenue_mean) / revenue_std > 2) OR
+            -- Negative anomalies (lower is better)
+            (acquisition_cost_std IS NOT NULL AND acquisition_cost_std > 0 AND (acquisition_cost_mean - avg_acquisition_cost) / acquisition_cost_std > 2)
+        ) THEN 'positive'
+        WHEN (
+            -- Negative anomalies (higher is worse)
+            (acquisition_cost_std IS NOT NULL AND acquisition_cost_std > 0 AND (avg_acquisition_cost - acquisition_cost_mean) / acquisition_cost_std > 2) OR
+            -- Positive anomalies (lower is worse)
+            (conversion_rate_std IS NOT NULL AND conversion_rate_std > 0 AND (conversion_rate_mean - avg_conversion_rate) / conversion_rate_std > 2) OR
+            (roi_std IS NOT NULL AND roi_std > 0 AND (roi_mean - avg_roi) / roi_std > 2) OR
+            (ctr_std IS NOT NULL AND ctr_std > 0 AND (ctr_mean - quarterly_ctr) / ctr_std > 2) OR
+            (revenue_std IS NOT NULL AND revenue_std > 0 AND (revenue_mean - total_revenue) / revenue_std > 2)
+        ) THEN 'negative'
+        ELSE 'normal'
+    END AS anomaly_impact,
     
     -- Anomaly description for dashboard display
     CASE
@@ -302,7 +396,16 @@ SELECT
             THEN 'Unusually high campaign count'
         WHEN campaign_count_std IS NOT NULL AND campaign_count_std > 0 AND (campaign_count - campaign_count_mean) / campaign_count_std < -2 
             THEN 'Unusually low campaign count'
+        WHEN spend_std IS NOT NULL AND spend_std > 0 AND (total_spend - spend_mean) / spend_std > 2 
+            THEN 'Unusually high spend'
+        WHEN spend_std IS NOT NULL AND spend_std > 0 AND (total_spend - spend_mean) / spend_std < -2 
+            THEN 'Unusually low spend'
+        WHEN revenue_std IS NOT NULL AND revenue_std > 0 AND (total_revenue - revenue_mean) / revenue_std > 2 
+            THEN 'Unusually high revenue'
+        WHEN revenue_std IS NOT NULL AND revenue_std > 0 AND (total_revenue - revenue_mean) / revenue_std < -2 
+            THEN 'Unusually low revenue'
         ELSE NULL
     END AS anomaly_description
 FROM rolling_stats
-ORDER BY Company, Target_Audience, quarter_id
+WHERE quarter_id = (SELECT current_quarter_id FROM date_ranges)
+ORDER BY Company, Target_Audience

@@ -2,6 +2,10 @@
 /dataset/
 /data/
 /backup/
+/api_test_results/
+
+# Ignore internal test files
+test_api.*
 
 # Python
 __pycache__/

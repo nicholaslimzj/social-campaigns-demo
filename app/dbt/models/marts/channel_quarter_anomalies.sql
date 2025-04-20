@@ -11,23 +11,25 @@ values based on recent trends and statistical thresholds. It focuses on quarter-
 and flags significant deviations that may require attention.
 
 Key Features:
-1. Channel as the primary dimension
-2. Calculates rolling statistics (mean, standard deviation) for key metrics using recent quarters
-3. Identifies outliers based on z-score methodology comparing current quarter to previous quarters
-4. Flags significant quarterly deviations that may require attention
-5. Provides context for each anomaly to aid investigation
+1. Hierarchical structure with Company as the primary dimension
+2. Channel_Used as the secondary dimension within each Company
+3. Calculates rolling statistics (mean, standard deviation) for key metrics using recent quarters
+4. Identifies outliers based on z-score methodology comparing current quarter to previous quarters
+5. Flags significant quarterly deviations that may require attention
+6. Provides context for each anomaly to aid investigation
 
 Dashboard Usage:
-- Channel Anomalies timeline visualization
-- Performance Monitoring section
-- Risk Management visualizations
+- Company-Channel Quarterly Anomaly Detection alerts
+- Company-specific Channel Performance Monitoring section
+- Channel Risk Management visualizations by company
 */
 
 WITH 
 -- First, determine the date range for the current quarter
 date_ranges AS (
     SELECT
-        MAX(EXTRACT(MONTH FROM CAST(Date AS DATE))) AS current_max_month
+        MAX(EXTRACT(MONTH FROM CAST(Date AS DATE))) AS current_max_month,
+        MAX(EXTRACT(MONTH FROM CAST(Date AS DATE))) / 3 + MAX(EXTRACT(YEAR FROM CAST(Date AS DATE))) * 4 AS current_quarter_id
     FROM {{ ref('stg_campaigns') }}
 ),
 
@@ -40,9 +42,10 @@ with_quarters AS (
     WHERE EXTRACT(MONTH FROM CAST(Date AS DATE)) >= (SELECT current_max_month - 2 FROM date_ranges)
 ),
 
--- Get channel metrics by quarter
+-- Get company-channel metrics by quarter
 channel_quarterly_metrics AS (
     SELECT 
+        Company,
         Channel_Used,
         quarter,
         AVG(Conversion_Rate) as avg_conversion_rate,
@@ -52,15 +55,17 @@ channel_quarterly_metrics AS (
         SUM(Impressions) as total_impressions,
         CAST(SUM(Clicks) AS FLOAT) / NULLIF(SUM(Impressions), 0) as quarterly_ctr,
         SUM(Clicks * Acquisition_Cost) as total_spend,
-        SUM(Clicks * Acquisition_Cost * ROI) as total_revenue
+        SUM(Clicks * Acquisition_Cost * ROI) as total_revenue,
+        COUNT(DISTINCT Campaign_ID) as campaign_count
     FROM with_quarters
-    GROUP BY Channel_Used, quarter
-    ORDER BY Channel_Used, quarter
+    GROUP BY Company, Channel_Used, quarter
+    ORDER BY Company, Channel_Used, quarter
 ),
 
 -- Calculate rolling statistics for each metric
 rolling_stats AS (
     SELECT
+        Company,
         Channel_Used,
         quarter,
         avg_conversion_rate,
@@ -71,91 +76,96 @@ rolling_stats AS (
         quarterly_ctr,
         total_spend,
         total_revenue,
+        campaign_count,
         
         -- Rolling averages (3-quarter window excluding current quarter)
         AVG(avg_conversion_rate) OVER (
-            PARTITION BY Channel_Used
+            PARTITION BY Company, Channel_Used
             ORDER BY quarter
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
         ) AS conversion_rate_mean,
         
         AVG(avg_roi) OVER (
-            PARTITION BY Channel_Used
+            PARTITION BY Company, Channel_Used
             ORDER BY quarter
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
         ) AS roi_mean,
         
         AVG(avg_acquisition_cost) OVER (
-            PARTITION BY Channel_Used
+            PARTITION BY Company, Channel_Used
             ORDER BY quarter
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
         ) AS acquisition_cost_mean,
         
         AVG(total_clicks) OVER (
-            PARTITION BY Channel_Used
+            PARTITION BY Company, Channel_Used
             ORDER BY quarter
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
         ) AS clicks_mean,
         
         AVG(total_impressions) OVER (
-            PARTITION BY Channel_Used
+            PARTITION BY Company, Channel_Used
             ORDER BY quarter
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
         ) AS impressions_mean,
         
         AVG(quarterly_ctr) OVER (
-            PARTITION BY Channel_Used
+            PARTITION BY Company, Channel_Used
             ORDER BY quarter
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
         ) AS ctr_mean,
         
-
+        AVG(campaign_count) OVER (
+            PARTITION BY Company, Channel_Used
+            ORDER BY quarter
+            ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
+        ) AS campaign_count_mean,
         
         AVG(total_spend) OVER (
-            PARTITION BY Channel_Used
+            PARTITION BY Company, Channel_Used
             ORDER BY quarter
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
         ) AS spend_mean,
         
         AVG(total_revenue) OVER (
-            PARTITION BY Channel_Used
+            PARTITION BY Company, Channel_Used
             ORDER BY quarter
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
         ) AS revenue_mean,
         
         -- Rolling standard deviations
         STDDEV_POP(avg_conversion_rate) OVER (
-            PARTITION BY Channel_Used
+            PARTITION BY Company, Channel_Used
             ORDER BY quarter
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
         ) AS conversion_rate_std,
         
         STDDEV_POP(avg_roi) OVER (
-            PARTITION BY Channel_Used
+            PARTITION BY Company, Channel_Used
             ORDER BY quarter
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
         ) AS roi_std,
         
         STDDEV_POP(avg_acquisition_cost) OVER (
-            PARTITION BY Channel_Used
+            PARTITION BY Company, Channel_Used
             ORDER BY quarter
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
         ) AS acquisition_cost_std,
         
         STDDEV_POP(total_clicks) OVER (
-            PARTITION BY Channel_Used
+            PARTITION BY Company, Channel_Used
             ORDER BY quarter
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
         ) AS clicks_std,
         
         STDDEV_POP(total_impressions) OVER (
-            PARTITION BY Channel_Used
+            PARTITION BY Company, Channel_Used
             ORDER BY quarter
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
         ) AS impressions_std,
         
         STDDEV_POP(quarterly_ctr) OVER (
-            PARTITION BY Channel_Used
+            PARTITION BY Company, Channel_Used
             ORDER BY quarter
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
         ) AS ctr_std,
@@ -163,23 +173,29 @@ rolling_stats AS (
 
         
         STDDEV_POP(total_spend) OVER (
-            PARTITION BY Channel_Used
+            PARTITION BY Company, Channel_Used
             ORDER BY quarter
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
         ) AS spend_std,
         
         STDDEV_POP(total_revenue) OVER (
-            PARTITION BY Channel_Used
+            PARTITION BY Company, Channel_Used
             ORDER BY quarter
             ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
-        ) AS revenue_std
+        ) AS revenue_std,
+        
+        STDDEV_POP(campaign_count) OVER (
+            PARTITION BY Company, Channel_Used
+            ORDER BY quarter
+            ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
+        ) AS campaign_count_std
     FROM channel_quarterly_metrics
 )
 
 -- Calculate z-scores and flag anomalies
 SELECT
+    Company,
     Channel_Used,
-    quarter,
     
     -- Conversion Rate
     avg_conversion_rate,
@@ -295,6 +311,20 @@ SELECT
         ELSE 'normal'
     END AS revenue_anomaly,
     
+    -- Campaign Count metrics
+    campaign_count,
+    campaign_count_mean,
+    campaign_count_std,
+    CASE
+        WHEN campaign_count_std IS NULL OR campaign_count_std = 0 THEN NULL
+        ELSE (campaign_count - campaign_count_mean) / campaign_count_std
+    END AS campaign_count_z,
+    CASE
+        WHEN campaign_count_std IS NULL OR campaign_count_std = 0 THEN 'normal'
+        WHEN ABS((campaign_count - campaign_count_mean) / campaign_count_std) > 2 THEN 'anomaly'
+        ELSE 'normal'
+    END AS campaign_count_anomaly,
+    
     -- Create a summary field for easy filtering
     CASE
         WHEN (
@@ -306,7 +336,8 @@ SELECT
             (ctr_std IS NOT NULL AND ctr_std > 0 AND ABS((quarterly_ctr - ctr_mean) / ctr_std) > 2) OR
 
             (spend_std IS NOT NULL AND spend_std > 0 AND ABS((total_spend - spend_mean) / spend_std) > 2) OR
-            (revenue_std IS NOT NULL AND revenue_std > 0 AND ABS((total_revenue - revenue_mean) / revenue_std) > 2)
+            (revenue_std IS NOT NULL AND revenue_std > 0 AND ABS((total_revenue - revenue_mean) / revenue_std) > 2) OR
+            (campaign_count_std IS NOT NULL AND campaign_count_std > 0 AND ABS((campaign_count - campaign_count_mean) / campaign_count_std) > 2)
         ) THEN TRUE
         ELSE FALSE
     END AS has_anomaly,
@@ -321,7 +352,8 @@ SELECT
         CASE WHEN ctr_std IS NOT NULL AND ctr_std > 0 AND ABS((quarterly_ctr - ctr_mean) / ctr_std) > 2 THEN 1 ELSE 0 END +
 
         CASE WHEN spend_std IS NOT NULL AND spend_std > 0 AND ABS((total_spend - spend_mean) / spend_std) > 2 THEN 1 ELSE 0 END +
-        CASE WHEN revenue_std IS NOT NULL AND revenue_std > 0 AND ABS((total_revenue - revenue_mean) / revenue_std) > 2 THEN 1 ELSE 0 END
+        CASE WHEN revenue_std IS NOT NULL AND revenue_std > 0 AND ABS((total_revenue - revenue_mean) / revenue_std) > 2 THEN 1 ELSE 0 END +
+        CASE WHEN campaign_count_std IS NOT NULL AND campaign_count_std > 0 AND ABS((campaign_count - campaign_count_mean) / campaign_count_std) > 2 THEN 1 ELSE 0 END
     ) AS anomaly_count,
     
     -- Anomaly impact (positive or negative)
@@ -347,4 +379,5 @@ SELECT
         ELSE 'normal'
     END AS anomaly_impact
 FROM rolling_stats
-ORDER BY Channel_Used, quarter
+WHERE quarter = (SELECT current_quarter_id FROM date_ranges)
+ORDER BY Company, Channel_Used

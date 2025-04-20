@@ -37,49 +37,9 @@ API_DOCS = {
         }
     },
     
-    "/api/companies/{company_id}/metrics": {
-        "description": "Get KPI metrics for a specific company",
-        "method": "GET",
-        "parameters": [
-            {
-                "name": "include_comparison",
-                "in": "query",
-                "required": False,
-                "description": "Whether to include quarter-over-quarter comparison",
-                "type": "boolean",
-                "default": False
-            }
-        ],
-        "response_format": {
-            "type": "object",
-            "properties": {
-                "conversion_rate": "number",
-                "conversion_rate_change": "number",
-                "roi": "number",
-                "roi_change": "number",
-                "acquisition_cost": "number",
-                "acquisition_cost_change": "number",
-                "ctr": "number",
-                "ctr_change": "number",
-                "campaign_count": "integer",
-                "campaign_count_change": "number"
-            },
-            "example": {
-                "conversion_rate": 0.0342,
-                "conversion_rate_change": 0.05,
-                "roi": 2.7,
-                "roi_change": -0.02,
-                "acquisition_cost": 42.18,
-                "acquisition_cost_change": -0.03,
-                "ctr": 0.0215,
-                "ctr_change": 0.01,
-                "campaign_count": 24,
-                "campaign_count_change": 0.0
-            }
-        }
-    },
+
     
-    "/api/companies/{company_id}/monthly_company_metrics": {
+    "/api/companies/{company_id}/monthly_metrics": {
         "description": "Get monthly metrics for a specific company",
         "method": "GET",
         "parameters": [
@@ -179,7 +139,7 @@ API_DOCS = {
         }
     },
     
-    "/api/companies/{company_id}/monthly_audience_metrics": {
+    "/api/companies/{company_id}/audiences/monthly_metrics": {
         "description": "Get monthly metrics by target audience for a specific company",
         "method": "GET",
         "parameters": [],
@@ -338,6 +298,19 @@ API_DOCS = {
                         }
                     }
                 }
+            },
+            "example": {
+                "anomalies": [
+                    {
+                        "audience_id": "Young Professionals",
+                        "metric": "roi",
+                        "expected_value": 3.2,
+                        "actual_value": 4.1,
+                        "z_score": 2.5,
+                        "date": "2022-03-31",
+                        "explanation": "Unusually high ROI"
+                    }
+                ]
             }
         }
     },
@@ -515,7 +488,7 @@ API_DOCS = {
     },
     
     "/api/companies/{company_id}/channel_anomalies": {
-        "description": "Get channel anomalies for a specific company",
+        "description": "Get anomalies for channels of a specific company",
         "method": "GET",
         "parameters": [
             {
@@ -544,6 +517,107 @@ API_DOCS = {
                             "explanation": "string"
                         }
                     }
+                }
+            }
+        }
+    },
+    
+    "/api/companies/{company_id}/channel_budget_optimizer": {
+        "description": "Get budget allocation optimization recommendations for channels of a specific company",
+        "method": "GET",
+        "parameters": [
+            {
+                "name": "total_budget",
+                "in": "query",
+                "required": False,
+                "description": "Total budget to allocate across channels. If not provided, current total spend will be used.",
+                "type": "number",
+                "default": 0
+            },
+            {
+                "name": "optimization_goal",
+                "in": "query",
+                "required": False,
+                "description": "Metric to optimize for (currently only supports 'roi')",
+                "type": "string",
+                "default": "roi"
+            }
+        ],
+        "response_format": {
+            "type": "object",
+            "properties": {
+                "current_allocation": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "channel_id": "string",
+                            "amount": "number",
+                            "percentage": "number",
+                            "roi": "number"
+                        }
+                    }
+                },
+                "optimized_allocation": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "channel_id": "string",
+                            "amount": "number",
+                            "percentage": "number",
+                            "roi": "number",
+                            "change_direction": "string",
+                            "change_strength": "string"
+                        }
+                    }
+                },
+                "optimization_metrics": {
+                    "type": "object",
+                    "properties": {
+                        "total_budget": "number",
+                        "optimization_goal": "string",
+                        "projected_improvement": "number"
+                    }
+                }
+            },
+            "example": {
+                "current_allocation": [
+                    {
+                        "channel_id": "Social Media",
+                        "amount": 25000,
+                        "percentage": 25.0,
+                        "roi": 3.2
+                    },
+                    {
+                        "channel_id": "Search",
+                        "amount": 35000,
+                        "percentage": 35.0,
+                        "roi": 4.1
+                    }
+                ],
+                "optimized_allocation": [
+                    {
+                        "channel_id": "Social Media",
+                        "amount": 20000,
+                        "percentage": 20.0,
+                        "roi": 3.5,
+                        "change_direction": "decrease_spend",
+                        "change_strength": "moderate"
+                    },
+                    {
+                        "channel_id": "Search",
+                        "amount": 40000,
+                        "percentage": 40.0,
+                        "roi": 4.5,
+                        "change_direction": "increase_spend",
+                        "change_strength": "strong"
+                    }
+                ],
+                "optimization_metrics": {
+                    "total_budget": 100000,
+                    "optimization_goal": "roi",
+                    "projected_improvement": 12.5
                 }
             }
         }
@@ -604,10 +678,73 @@ API_DOCS = {
         }
     },
     
+    "/api/companies/{company_id}/goals": {
+        "description": "Get list of campaign goals for a specific company",
+        "method": "GET",
+        "parameters": [
+            {
+                "name": "include_metrics",
+                "in": "query",
+                "required": False,
+                "description": "Whether to include metrics with each goal",
+                "type": "boolean",
+                "default": False
+            }
+        ],
+        "response_format": {
+            "type": "object",
+            "properties": {
+                "goals": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "goal_id": "string",
+                            "campaign_count": "integer",
+                            "avg_roi": "number",
+                            "avg_conversion_rate": "number",
+                            "avg_acquisition_cost": "number",
+                            "avg_ctr": "number"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    
+    "/api/companies/{company_id}/monthly_campaign_metrics": {
+        "description": "Get monthly campaign metrics for a specific company",
+        "method": "GET",
+        "parameters": [],
+        "response_format": {
+            "type": "object",
+            "properties": {
+                "metrics": {
+                    "type": "object",
+                    "properties": {
+                        "roi": "array",
+                        "conversion_rate": "array",
+                        "acquisition_cost": "array",
+                        "ctr": "array"
+                    }
+                }
+            }
+        }
+    },
+    
     "/api/companies/{company_id}/campaign_duration_analysis": {
         "description": "Get campaign duration impact analysis",
         "method": "GET",
-        "parameters": [],
+        "parameters": [
+            {
+                "name": "dimension",
+                "in": "query",
+                "required": False,
+                "description": "Dimension to analyze (audience, channel, goal)",
+                "type": "string",
+                "default": "audience"
+            }
+        ],
         "response_format": {
             "type": "object",
             "properties": {
@@ -623,10 +760,21 @@ API_DOCS = {
                             "dimension_value": "string"
                         }
                     }
+                },
+                "summary": {
+                    "type": "object",
+                    "properties": {
+                        "avg_duration": "number",
+                        "min_duration": "number",
+                        "max_duration": "number",
+                        "count": "integer"
+                    }
                 }
             }
         }
     },
+    
+
     
     "/api/companies/{company_id}/campaign_clusters": {
         "description": "Get winning campaign combinations",

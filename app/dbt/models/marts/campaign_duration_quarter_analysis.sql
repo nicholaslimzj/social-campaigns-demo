@@ -276,6 +276,97 @@ exact_duration_performance AS (
     GROUP BY Company, Duration
     HAVING COUNT(*) >= 2  -- Only consider durations with enough data
     ORDER BY Company, Duration
+),
+
+-- Prepare the raw duration performance data for heatmap visualization
+company_duration_heatmap AS (
+    SELECT
+        'company_duration_heatmap' AS analysis_type,
+        Company,
+        'Company' AS dimension,
+        Company AS category,
+        duration_bucket,
+        duration_bucket_num,
+        min_duration,
+        max_duration,
+        campaign_count,
+        avg_conversion_rate,
+        avg_roi,
+        avg_acquisition_cost,
+        avg_ctr,
+        avg_roi_per_day,
+        -- Calculate ROI impact compared to company average
+        avg_roi - (SELECT AVG(avg_roi) FROM duration_performance_by_company c2 WHERE c2.Company = duration_performance_by_company.Company) AS roi_impact,
+        -- Calculate ROI impact percentage
+        CASE 
+            WHEN (SELECT AVG(avg_roi) FROM duration_performance_by_company c2 WHERE c2.Company = duration_performance_by_company.Company) = 0 THEN 0
+            ELSE (avg_roi / (SELECT AVG(avg_roi) FROM duration_performance_by_company c2 WHERE c2.Company = duration_performance_by_company.Company) - 1) * 100 
+        END AS roi_impact_pct
+    FROM duration_performance_by_company
+),
+
+goal_duration_heatmap AS (
+    SELECT
+        'goal_duration_heatmap' AS analysis_type,
+        Company,
+        'Goal' AS dimension,
+        goal AS category,
+        duration_bucket,
+        duration_bucket_num,
+        min_duration,
+        max_duration,
+        campaign_count,
+        avg_conversion_rate,
+        avg_roi,
+        avg_acquisition_cost,
+        avg_ctr,
+        avg_roi_per_day,
+        -- Calculate ROI impact compared to goal average
+        avg_roi - (SELECT AVG(avg_roi) FROM duration_performance_by_company_goal g2 
+                   WHERE g2.Company = duration_performance_by_company_goal.Company 
+                   AND g2.goal = duration_performance_by_company_goal.goal) AS roi_impact,
+        -- Calculate ROI impact percentage
+        CASE 
+            WHEN (SELECT AVG(avg_roi) FROM duration_performance_by_company_goal g2 
+                  WHERE g2.Company = duration_performance_by_company_goal.Company 
+                  AND g2.goal = duration_performance_by_company_goal.goal) = 0 THEN 0
+            ELSE (avg_roi / (SELECT AVG(avg_roi) FROM duration_performance_by_company_goal g2 
+                            WHERE g2.Company = duration_performance_by_company_goal.Company 
+                            AND g2.goal = duration_performance_by_company_goal.goal) - 1) * 100 
+        END AS roi_impact_pct
+    FROM duration_performance_by_company_goal
+),
+
+channel_duration_heatmap AS (
+    SELECT
+        'channel_duration_heatmap' AS analysis_type,
+        Company,
+        'Channel' AS dimension,
+        channel AS category,
+        duration_bucket,
+        duration_bucket_num,
+        min_duration,
+        max_duration,
+        campaign_count,
+        avg_conversion_rate,
+        avg_roi,
+        avg_acquisition_cost,
+        avg_ctr,
+        avg_roi_per_day,
+        -- Calculate ROI impact compared to channel average
+        avg_roi - (SELECT AVG(avg_roi) FROM duration_performance_by_company_channel c2 
+                   WHERE c2.Company = duration_performance_by_company_channel.Company 
+                   AND c2.channel = duration_performance_by_company_channel.channel) AS roi_impact,
+        -- Calculate ROI impact percentage
+        CASE 
+            WHEN (SELECT AVG(avg_roi) FROM duration_performance_by_company_channel c2 
+                  WHERE c2.Company = duration_performance_by_company_channel.Company 
+                  AND c2.channel = duration_performance_by_company_channel.channel) = 0 THEN 0
+            ELSE (avg_roi / (SELECT AVG(avg_roi) FROM duration_performance_by_company_channel c2 
+                            WHERE c2.Company = duration_performance_by_company_channel.Company 
+                            AND c2.channel = duration_performance_by_company_channel.channel) - 1) * 100 
+        END AS roi_impact_pct
+    FROM duration_performance_by_company_channel
 )
 
 -- Final output combining all analyses
@@ -298,11 +389,96 @@ SELECT
     NULL AS avg_roi,
     NULL AS avg_acquisition_cost,
     NULL AS avg_ctr,
-    NULL AS avg_roi_per_day
+    NULL AS avg_roi_per_day,
+    NULL AS roi_impact,
+    NULL AS roi_impact_pct,
+    NULL AS duration_bucket_num
 FROM all_optimal_durations
 
 UNION ALL
 
+-- Add company duration heatmap data
+SELECT
+    analysis_type,
+    Company,
+    dimension,
+    category,
+    NULL AS optimal_duration_bucket,
+    min_duration AS optimal_min_duration,
+    max_duration AS optimal_max_duration,
+    NULL AS optimal_roi,
+    NULL AS optimal_conversion_rate,
+    NULL AS optimal_roi_per_day,
+    NULL AS optimal_duration_range,
+    NULL AS Duration,
+    campaign_count,
+    avg_conversion_rate,
+    avg_roi,
+    avg_acquisition_cost,
+    avg_ctr,
+    avg_roi_per_day,
+    roi_impact,
+    roi_impact_pct,
+    duration_bucket_num
+FROM company_duration_heatmap
+
+UNION ALL
+
+-- Add goal duration heatmap data
+SELECT
+    analysis_type,
+    Company,
+    dimension,
+    category,
+    NULL AS optimal_duration_bucket,
+    min_duration AS optimal_min_duration,
+    max_duration AS optimal_max_duration,
+    NULL AS optimal_roi,
+    NULL AS optimal_conversion_rate,
+    NULL AS optimal_roi_per_day,
+    NULL AS optimal_duration_range,
+    NULL AS Duration,
+    campaign_count,
+    avg_conversion_rate,
+    avg_roi,
+    avg_acquisition_cost,
+    avg_ctr,
+    avg_roi_per_day,
+    roi_impact,
+    roi_impact_pct,
+    duration_bucket_num
+FROM goal_duration_heatmap
+
+UNION ALL
+
+-- Add channel duration heatmap data
+SELECT
+    analysis_type,
+    Company,
+    dimension,
+    category,
+    NULL AS optimal_duration_bucket,
+    min_duration AS optimal_min_duration,
+    max_duration AS optimal_max_duration,
+    NULL AS optimal_roi,
+    NULL AS optimal_conversion_rate,
+    NULL AS optimal_roi_per_day,
+    NULL AS optimal_duration_range,
+    NULL AS Duration,
+    campaign_count,
+    avg_conversion_rate,
+    avg_roi,
+    avg_acquisition_cost,
+    avg_ctr,
+    avg_roi_per_day,
+    roi_impact,
+    roi_impact_pct,
+    duration_bucket_num
+FROM channel_duration_heatmap
+
+UNION ALL
+
+-- Add exact duration performance data
 SELECT
     'exact_duration_performance' AS analysis_type,
     Company,
@@ -321,5 +497,8 @@ SELECT
     avg_roi,
     avg_acquisition_cost,
     avg_ctr,
-    avg_roi_per_day
+    avg_roi_per_day,
+    NULL AS roi_impact,
+    NULL AS roi_impact_pct,
+    NULL AS duration_bucket_num
 FROM exact_duration_performance

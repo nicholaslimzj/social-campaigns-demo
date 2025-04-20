@@ -1,21 +1,30 @@
 {
   "name": "campaign_duration_quarter_analysis",
-  "description": "Mart model analyzing the relationship between campaign duration and performance metrics (ROI, Conversion Rate, CTR, etc.) for the most recent quarter (last 3 months of data).\nIt identifies optimal campaign durations based on average ROI for various dimensions (overall, by goal, segment, channel, and combinations thereof).\nThe model provides three types of analysis indicated by the `analysis_type` column:\n1.  `optimal_durations`: Recommends the best performing duration bucket for different campaign dimensions.\n2.  `exact_duration_performance`: Shows aggregated performance metrics for each specific campaign duration (in days) observed in the quarter.\n3.  `roi_impact_analysis`: Compares the actual ROI of campaigns within a specific duration bucket against the potential ROI if they had used the optimal duration identified for their goal/segment or goal/channel combination.\nThis model is intended for dashboards visualizing campaign duration impact and providing optimization recommendations.\n",
+  "description": "Analyzes the relationship between campaign duration and performance metrics (ROI, Conversion Rate, CTR, etc.) for the most recent quarter (last 3 months of data).\nIt identifies optimal campaign duration buckets based on average ROI across different dimensions: overall company, company-goal, and company-channel.\nThe model also provides aggregated performance metrics for exact campaign durations.\nThis analysis helps in understanding optimal campaign lengths for planning and optimization.\nData is filtered to include only duration buckets or exact durations with at least 2 campaigns.\nOutput includes two types of analysis identified by the 'analysis_type' column: 'optimal_durations' and 'exact_duration_performance'.\n",
   "columns": [
     {
       "name": "analysis_type",
       "type": "VARCHAR",
-      "description": "Identifies the type of analysis performed in this row: 'optimal_durations', 'exact_duration_performance', or 'roi_impact_analysis'.",
+      "description": "Indicates the type of analysis presented in the row: 'optimal_durations' (summary of best performing duration bucket) or 'exact_duration_performance' (performance metrics for a specific campaign duration in days).",
+      "tests": [
+        "dbt_utils.unique_combination_of_columns"
+      ],
+      "tags": []
+    },
+    {
+      "name": "Company",
+      "type": "VARCHAR",
+      "description": "The name of the company for which the campaign analysis is performed.",
       "tests": [
         "not_null",
-        "accepted_values"
+        "relationships"
       ],
       "tags": []
     },
     {
       "name": "dimension",
       "type": "VARCHAR",
-      "description": "The dimension for which the optimal duration is calculated (e.g., 'Overall', 'Goal', 'Segment', 'Channel', 'Goal-Segment', 'Goal-Channel'). Populated only when analysis_type = 'optimal_durations'.",
+      "description": "The dimension used for identifying the optimal duration ('Company', 'Goal', 'Channel'). Populated only when analysis_type is 'optimal_durations'.",
       "tests": [
         "accepted_values"
       ],
@@ -24,14 +33,14 @@
     {
       "name": "category",
       "type": "VARCHAR",
-      "description": "The specific category within the dimension (e.g., 'All' for Overall, a specific goal name for Goal, segment name for Segment, etc.). Populated only when analysis_type = 'optimal_durations'.",
+      "description": "The specific category within the dimension (e.g., company name, goal name, channel name). Populated only when analysis_type is 'optimal_durations'.",
       "tests": [],
       "tags": []
     },
     {
       "name": "optimal_duration_bucket",
       "type": "VARCHAR",
-      "description": "The recommended campaign duration range (bucket) based on the highest average ROI for the given dimension and category. Populated only when analysis_type = 'optimal_durations'.",
+      "description": "The text representation of the campaign duration bucket (e.g., '22-30 days') identified as having the highest average ROI for the given company/dimension/category. Populated only when analysis_type is 'optimal_durations'.",
       "tests": [
         "accepted_values"
       ],
@@ -40,7 +49,7 @@
     {
       "name": "optimal_min_duration",
       "type": "BIGINT",
-      "description": "The minimum duration (in days) included in the optimal duration bucket. Populated only when analysis_type = 'optimal_durations'.",
+      "description": "The minimum campaign duration (in days) included in the optimal duration bucket. Populated only when analysis_type is 'optimal_durations'.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -49,7 +58,7 @@
     {
       "name": "optimal_max_duration",
       "type": "BIGINT",
-      "description": "The maximum duration (in days) included in the optimal duration bucket. Populated only when analysis_type = 'optimal_durations'.",
+      "description": "The maximum campaign duration (in days) included in the optimal duration bucket. Populated only when analysis_type is 'optimal_durations'.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -58,7 +67,7 @@
     {
       "name": "optimal_roi",
       "type": "DOUBLE",
-      "description": "The average Return on Investment (ROI) achieved within the optimal duration bucket for the given dimension and category. Populated only when analysis_type = 'optimal_durations'.",
+      "description": "The average Return on Investment (ROI) achieved within the optimal duration bucket for the given company/dimension/category. Populated only when analysis_type is 'optimal_durations'.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -67,7 +76,7 @@
     {
       "name": "optimal_conversion_rate",
       "type": "DOUBLE",
-      "description": "The average Conversion Rate achieved within the optimal duration bucket for the given dimension and category. Populated only when analysis_type = 'optimal_durations'.",
+      "description": "The average conversion rate achieved within the optimal duration bucket for the given company/dimension/category. Populated only when analysis_type is 'optimal_durations'.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -76,23 +85,21 @@
     {
       "name": "optimal_roi_per_day",
       "type": "DOUBLE",
-      "description": "The average Return on Investment (ROI) per day, calculated as AVG(ROI / Duration), within the optimal duration bucket. Helps normalize ROI across different duration lengths. Populated only when analysis_type = 'optimal_durations'.",
-      "tests": [
-        "dbt_utils.accepted_range"
-      ],
+      "description": "The average Return on Investment (ROI) per day, calculated within the optimal duration bucket to normalize for duration length. Populated only when analysis_type is 'optimal_durations'.",
+      "tests": [],
       "tags": []
     },
     {
       "name": "optimal_duration_range",
       "type": "VARCHAR",
-      "description": "A formatted string representing the optimal duration range (e.g., '15-21 days'). Populated only when analysis_type = 'optimal_durations'.",
+      "description": "A formatted string representing the optimal duration range (e.g., '30-30 days', '31-45 days'). Derived from optimal_min_duration and optimal_max_duration. Populated only when analysis_type is 'optimal_durations'.",
       "tests": [],
       "tags": []
     },
     {
       "name": "Duration",
       "type": "BIGINT",
-      "description": "The exact campaign duration in days. Populated only when analysis_type = 'exact_duration_performance'.",
+      "description": "The exact duration of campaigns in days. Populated only when analysis_type is 'exact_duration_performance'.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -101,9 +108,8 @@
     {
       "name": "campaign_count",
       "type": "BIGINT",
-      "description": "The number of campaigns included in the aggregation for the specific row (e.g., count in a duration bucket, count for an exact duration, count for a specific goal/segment/channel/bucket combination).",
+      "description": "The number of campaigns aggregated for this specific duration (when analysis_type is 'exact_duration_performance'). Based on HAVING clause, this should be >= 2.",
       "tests": [
-        "not_null",
         "dbt_utils.accepted_range"
       ],
       "tags": []
@@ -111,7 +117,7 @@
     {
       "name": "avg_conversion_rate",
       "type": "DOUBLE",
-      "description": "The average Conversion Rate for campaigns matching the row's criteria (e.g., for a specific exact duration). Populated only when analysis_type = 'exact_duration_performance'.",
+      "description": "The average conversion rate for campaigns with the specified exact 'Duration'. Populated only when analysis_type is 'exact_duration_performance'.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -120,7 +126,7 @@
     {
       "name": "avg_roi",
       "type": "DOUBLE",
-      "description": "The average Return on Investment (ROI) for campaigns matching the row's criteria (e.g., for a specific exact duration). Populated only when analysis_type = 'exact_duration_performance'.",
+      "description": "The average Return on Investment (ROI) for campaigns with the specified exact 'Duration'. Populated only when analysis_type is 'exact_duration_performance'.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -129,7 +135,7 @@
     {
       "name": "avg_acquisition_cost",
       "type": "DOUBLE",
-      "description": "The average Acquisition Cost for campaigns matching the row's criteria (e.g., for a specific exact duration). Populated only when analysis_type = 'exact_duration_performance'.",
+      "description": "The average acquisition cost for campaigns with the specified exact 'Duration'. Populated only when analysis_type is 'exact_duration_performance'.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -138,7 +144,7 @@
     {
       "name": "avg_ctr",
       "type": "FLOAT",
-      "description": "The average Click-Through Rate (CTR) for campaigns matching the row's criteria (e.g., for a specific exact duration). Populated only when analysis_type = 'exact_duration_performance'.",
+      "description": "The average Click-Through Rate (CTR) for campaigns with the specified exact 'Duration'. Populated only when analysis_type is 'exact_duration_performance'.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -147,133 +153,8 @@
     {
       "name": "avg_roi_per_day",
       "type": "DOUBLE",
-      "description": "The average Return on Investment (ROI) per day for campaigns matching the row's criteria (e.g., for a specific exact duration). Populated only when analysis_type = 'exact_duration_performance'.",
-      "tests": [
-        "dbt_utils.accepted_range"
-      ],
-      "tags": []
-    },
-    {
-      "name": "goal",
-      "type": "VARCHAR",
-      "description": "The campaign goal associated with the performance metrics. Populated only when analysis_type = 'roi_impact_analysis'.",
-      "tests": [
-        "relationships"
-      ],
-      "tags": []
-    },
-    {
-      "name": "segment",
-      "type": "VARCHAR",
-      "description": "The customer segment targeted by the campaign. Populated only when analysis_type = 'roi_impact_analysis'.",
-      "tests": [
-        "relationships"
-      ],
-      "tags": []
-    },
-    {
-      "name": "channel",
-      "type": "VARCHAR",
-      "description": "The marketing channel used for the campaign. Populated only when analysis_type = 'roi_impact_analysis'.",
-      "tests": [
-        "relationships"
-      ],
-      "tags": []
-    },
-    {
-      "name": "duration_bucket",
-      "type": "VARCHAR",
-      "description": "The actual duration bucket the campaign falls into. Populated only when analysis_type = 'roi_impact_analysis'.",
-      "tests": [
-        "accepted_values"
-      ],
-      "tags": []
-    },
-    {
-      "name": "optimal_bucket_for_goal_segment",
-      "type": "VARCHAR",
-      "description": "The optimal duration bucket identified for the specific Goal-Segment combination of the campaign. Populated only when analysis_type = 'roi_impact_analysis'.",
+      "description": "The average Return on Investment (ROI) per day for campaigns with the specified exact 'Duration'. Populated only when analysis_type is 'exact_duration_performance'.",
       "tests": [],
-      "tags": []
-    },
-    {
-      "name": "optimal_bucket_for_goal_channel",
-      "type": "VARCHAR",
-      "description": "The optimal duration bucket identified for the specific Goal-Channel combination of the campaign. Populated only when analysis_type = 'roi_impact_analysis'.",
-      "tests": [],
-      "tags": []
-    },
-    {
-      "name": "actual_roi",
-      "type": "DOUBLE",
-      "description": "The average ROI achieved by campaigns with this specific Goal, Segment, Channel, and Duration Bucket combination. Populated only when analysis_type = 'roi_impact_analysis'.",
-      "tests": [
-        "dbt_utils.accepted_range"
-      ],
-      "tags": []
-    },
-    {
-      "name": "optimal_roi_for_goal_segment",
-      "type": "DOUBLE",
-      "description": "The ROI associated with the optimal duration bucket for the specific Goal-Segment combination. Populated only when analysis_type = 'roi_impact_analysis'.",
-      "tests": [
-        "dbt_utils.accepted_range"
-      ],
-      "tags": []
-    },
-    {
-      "name": "optimal_roi_for_goal_channel",
-      "type": "DOUBLE",
-      "description": "The ROI associated with the optimal duration bucket for the specific Goal-Channel combination. Populated only when analysis_type = 'roi_impact_analysis'.",
-      "tests": [
-        "dbt_utils.accepted_range"
-      ],
-      "tags": []
-    },
-    {
-      "name": "potential_roi_improvement_goal_segment",
-      "type": "DOUBLE",
-      "description": "The difference between the optimal ROI (for Goal-Segment) and the actual ROI, indicating potential uplift. Populated only when analysis_type = 'roi_impact_analysis'.",
-      "tests": [],
-      "tags": []
-    },
-    {
-      "name": "potential_roi_improvement_goal_channel",
-      "type": "DOUBLE",
-      "description": "The difference between the optimal ROI (for Goal-Channel) and the actual ROI, indicating potential uplift. Populated only when analysis_type = 'roi_impact_analysis'.",
-      "tests": [],
-      "tags": []
-    },
-    {
-      "name": "pct_improvement_goal_segment",
-      "type": "DOUBLE",
-      "description": "The potential percentage ROI improvement if the optimal duration (for Goal-Segment) was used instead of the actual duration bucket. Populated only when analysis_type = 'roi_impact_analysis'.",
-      "tests": [],
-      "tags": []
-    },
-    {
-      "name": "pct_improvement_goal_channel",
-      "type": "DOUBLE",
-      "description": "The potential percentage ROI improvement if the optimal duration (for Goal-Channel) was used instead of the actual duration bucket. Populated only when analysis_type = 'roi_impact_analysis'.",
-      "tests": [],
-      "tags": []
-    },
-    {
-      "name": "is_using_optimal_duration_goal_segment",
-      "type": "BOOLEAN",
-      "description": "Boolean flag indicating if the campaign's actual duration bucket matches the optimal bucket identified for its Goal-Segment combination. Populated only when analysis_type = 'roi_impact_analysis'.",
-      "tests": [
-        "not_null"
-      ],
-      "tags": []
-    },
-    {
-      "name": "is_using_optimal_duration_goal_channel",
-      "type": "BOOLEAN",
-      "description": "Boolean flag indicating if the campaign's actual duration bucket matches the optimal bucket identified for its Goal-Channel combination. Populated only when analysis_type = 'roi_impact_analysis'.",
-      "tests": [
-        "not_null"
-      ],
       "tags": []
     }
   ],
