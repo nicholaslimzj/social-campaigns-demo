@@ -1,0 +1,263 @@
+{
+  "name": "segment_company_quarter_rankings",
+  "description": "Ranks companies within each customer segment based on key performance metrics (Conversion Rate, ROI, Acquisition Cost, CTR)\nfor the current quarter (last 3 months of available data). This model identifies top-performing companies for specific segments\nand provides performance relative to segment and global averages. Used in Segment Performance Rankings dashboards and\nfor targeting strategy recommendations.\n",
+  "columns": [
+    {
+      "name": "Customer_Segment",
+      "type": "VARCHAR",
+      "description": "The customer segment the company's performance is evaluated within.",
+      "tests": [
+        "not_null",
+        "dbt_utils.unique_combination_of_columns",
+        "relationships"
+      ],
+      "tags": []
+    },
+    {
+      "name": "Company",
+      "type": "VARCHAR",
+      "description": "The company being evaluated.",
+      "tests": [
+        "not_null",
+        "relationships"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_conversion_rate",
+      "type": "DOUBLE",
+      "description": "Average conversion rate for the company within this segment for the current quarter.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_roi",
+      "type": "DOUBLE",
+      "description": "Average Return on Investment (ROI) for the company within this segment for the current quarter.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_non_negative"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_acquisition_cost",
+      "type": "DOUBLE",
+      "description": "Average acquisition cost for the company within this segment for the current quarter.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_non_negative"
+      ],
+      "tags": []
+    },
+    {
+      "name": "overall_ctr",
+      "type": "FLOAT",
+      "description": "Overall Click-Through Rate (CTR) calculated as total clicks / total impressions for the company within this segment for the current quarter.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "campaign_count",
+      "type": "BIGINT",
+      "description": "The total number of campaigns run by the company within this segment during the current quarter.",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "conversion_rate_rank",
+      "type": "BIGINT",
+      "description": "Rank of the company within the segment based on average conversion rate (descending - 1 is best).",
+      "tests": [
+        "not_null",
+        "accepted_values",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "roi_rank",
+      "type": "BIGINT",
+      "description": "Rank of the company within the segment based on average ROI (descending - 1 is best).",
+      "tests": [
+        "not_null",
+        "accepted_values",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "acquisition_cost_rank",
+      "type": "BIGINT",
+      "description": "Rank of the company within the segment based on average acquisition cost (ascending - 1 is best).",
+      "tests": [
+        "not_null",
+        "accepted_values",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "ctr_rank",
+      "type": "BIGINT",
+      "description": "Rank of the company within the segment based on overall CTR (descending - 1 is best).",
+      "tests": [
+        "not_null",
+        "accepted_values",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
+      "tags": []
+    },
+    {
+      "name": "total_companies_per_segment",
+      "type": "BIGINT",
+      "description": "Total number of unique companies evaluated within this customer segment for the quarter.",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "is_top_conversion_company",
+      "type": "BOOLEAN",
+      "description": "Boolean flag indicating if this company has the highest average conversion rate (rank 1) in the segment.",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "is_top_roi_company",
+      "type": "BOOLEAN",
+      "description": "Boolean flag indicating if this company has the highest average ROI (rank 1) in the segment.",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "is_top_acquisition_cost_company",
+      "type": "BOOLEAN",
+      "description": "Boolean flag indicating if this company has the lowest average acquisition cost (rank 1) in the segment.",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "is_top_ctr_company",
+      "type": "BOOLEAN",
+      "description": "Boolean flag indicating if this company has the highest overall CTR (rank 1) in the segment.",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "segment_avg_conversion_rate",
+      "type": "DOUBLE",
+      "description": "Average conversion rate across all companies within this segment for the current quarter.",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "segment_avg_roi",
+      "type": "DOUBLE",
+      "description": "Average ROI across all companies within this segment for the current quarter.",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "segment_avg_acquisition_cost",
+      "type": "DOUBLE",
+      "description": "Average acquisition cost across all companies within this segment for the current quarter.",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "segment_avg_ctr",
+      "type": "DOUBLE",
+      "description": "Average overall CTR across all companies within this segment for the current quarter.",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "company_count",
+      "type": "BIGINT",
+      "description": "Count of distinct companies within this segment (should match total_companies_per_segment).",
+      "tests": [
+        "not_null",
+        "accepted_values",
+        "dbt_expectations.expect_column_values_to_equal_column"
+      ],
+      "tags": []
+    },
+    {
+      "name": "conversion_rate_vs_segment_avg",
+      "type": "DOUBLE",
+      "description": "Company's average conversion rate relative to the segment average (e.g., 0.1 means 10% above segment average).",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "roi_vs_segment_avg",
+      "type": "DOUBLE",
+      "description": "Company's average ROI relative to the segment average (e.g., 0.1 means 10% above segment average).",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "acquisition_cost_vs_segment_avg",
+      "type": "DOUBLE",
+      "description": "Company's average acquisition cost relative to the segment average (inverted; e.g., 0.1 means 10% better/lower cost than segment average).",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "ctr_vs_segment_avg",
+      "type": "DOUBLE",
+      "description": "Company's overall CTR relative to the segment average (e.g., 0.1 means 10% above segment average).",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "conversion_rate_vs_global_avg",
+      "type": "DOUBLE",
+      "description": "Company's average conversion rate relative to the global average across all segments (e.g., 0.1 means 10% above global average).",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "roi_vs_global_avg",
+      "type": "DOUBLE",
+      "description": "Company's average ROI relative to the global average across all segments (e.g., 0.1 means 10% above global average).",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "acquisition_cost_vs_global_avg",
+      "type": "DOUBLE",
+      "description": "Company's average acquisition cost relative to the global average across all segments (inverted; e.g., 0.1 means 10% better/lower cost than global average).",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "ctr_vs_global_avg",
+      "type": "DOUBLE",
+      "description": "Company's overall CTR relative to the global average across all segments (e.g., 0.1 means 10% above global average).",
+      "tests": [],
+      "tags": []
+    }
+  ],
+  "tags": []
+}

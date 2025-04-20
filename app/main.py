@@ -12,6 +12,8 @@ Commands:
     python -m app.main dashboard  - Start the dashboard
     python -m app.main serve      - Start a simple web server
     python -m app.main vanna      - Start Vanna natural language to SQL CLI
+    python -m app.main metadata   - Generate metadata for dbt models
+    python -m app.main insights   - Generate AI-powered insights for social media data
 """
 
 import os
@@ -324,6 +326,40 @@ def generate_dbt_metadata(model_type=None, model_name=None, skip_existing=False,
         logger.error(f"Error generating metadata: {e}")
         return False
 
+def generate_insights(company_name=None, insight_type=None, force_refresh=False):
+    """
+    Generate AI-powered insights for social media advertising data.
+    
+    Args:
+        company_name: Name of the company to generate insights for
+        insight_type: Type of insight to generate ('company', 'segment', 'channel', 'campaign')
+        force_refresh: Whether to force refresh the insights cache
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Check if required environment variables are set
+        api_key = os.environ.get('GOOGLE_API_KEY')
+        if not api_key:
+            logger.error("No Google API key found in environment. Set GOOGLE_API_KEY.")
+            return False
+            
+        # Import the insights generator
+        from app.scripts.insights_generator import generate_insight_cli
+        
+        # Generate the insight (the function now handles company resolution and validation)
+        result = generate_insight_cli(company_name, insight_type, force_refresh)
+        return result
+        
+    except ImportError as e:
+        logger.error(f"Error importing insights generator: {e}")
+        logger.error("Make sure required packages are installed: pip install langchain-core langchain-google-genai")
+        return False
+    except Exception as e:
+        logger.error(f"Error generating insights: {e}")
+        return False
+
 def main():
     """
     Main function that runs when the application starts.
@@ -337,6 +373,11 @@ def main():
     model_name = None  # For metadata specific model
     skip_existing = False  # For metadata skip existing flag
     vanna_json = False  # For Vanna JSON export
+    
+    # For insights command
+    company_name = None
+    insight_type = None
+    force_refresh = False
     
     if len(sys.argv) > 1:
         command = sys.argv[1].lower()
@@ -368,6 +409,19 @@ def main():
                 else:
                     # Assume it's a model name
                     model_name = arg
+        
+        # Check for insights subcommands
+        if command == "insights":
+            args = sys.argv[2:]
+            if "--force" in args:
+                force_refresh = True
+                args.remove("--force")
+            
+            # Process remaining arguments
+            if args:
+                company_name = args[0]
+                if len(args) > 1:
+                    insight_type = args[1]
     
     # Execute the requested command
     if command == "check":
@@ -393,11 +447,14 @@ def main():
             start_vanna()
     elif command == "metadata":
         generate_dbt_metadata(model_type=model_type, model_name=model_name, skip_existing=skip_existing, vanna_json=vanna_json)
+    elif command == "insights":
+        generate_insights(company_name=company_name, insight_type=insight_type, force_refresh=force_refresh)
     else:
         logger.error(f"Unknown command: {command}")
-        logger.info("Available commands: check, process, dbt, dashboard, serve, vanna, metadata")
+        logger.info("Available commands: check, process, dbt, dashboard, serve, vanna, metadata, insights")
         logger.info("Vanna subcommands: vanna train, vanna query, vanna view-training")
         logger.info("Metadata subcommands: metadata [--skip-existing] [--vanna-json] [all|staging|marts] [model_name]")
+        logger.info("Insights subcommands: insights [company_name] [insight_type] [--force]")
     
     logger.info("Meta Demo application completed")
 

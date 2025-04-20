@@ -1,0 +1,117 @@
+version: 2
+
+models:
+  - name: dimensions_quarter_performance_rankings
+    description: |
+      Ranks entities (companies, channels, segments, target audiences) within their respective dimensions based on key performance metrics (Conversion Rate, ROI, Acquisition Cost, CTR) for the most recent quarter.
+      Calculates quarter-over-quarter (QoQ) changes and identifies performance trends compared to the previous quarter.
+      Provides context by showing the rank relative to the total number of entities in the dimension.
+      Designed for performance analysis dashboards, focusing on relative rankings and QoQ trends.
+      The 'current quarter' is defined as the last 3 months of available data, and the 'previous quarter' is the 3 months preceding that.
+    config:
+      materialized: table
+      tags:
+        - 'mart'
+        - 'performance'
+        - 'ranking'
+        - 'quarterly'
+        - 'dashboard'
+    columns:
+      - name: dimension
+        description: "The category being analyzed (e.g., 'company', 'channel', 'segment', 'audience')."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['company', 'channel', 'segment', 'audience']
+          # Primary key constraint (part 1)
+          - dbt_utils.unique_combination_of_columns:
+              combination_of_columns:
+                - dimension
+                - entity
+                - metric
+
+      - name: entity
+        description: "The specific item within the dimension being ranked (e.g., a specific company name, channel name, segment name, or target audience)."
+        tests:
+          - not_null
+          # Note: A relationship test back to stg_campaigns is complex due to the UNION structure.
+          # Ensuring the entity is not null provides basic integrity.
+
+      - name: metric
+        description: "The performance indicator being measured and ranked (e.g., 'conversion_rate', 'roi', 'acquisition_cost', 'ctr')."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['conversion_rate', 'roi', 'acquisition_cost', 'ctr']
+
+      - name: metric_value
+        description: "The calculated value of the specified metric for the entity in the current quarter."
+        tests:
+          - not_null
+          # Consider adding range checks if applicable, e.g., >= 0 for most metrics.
+          # dbt_expectations.expect_column_values_to_be_non_negative: {} # Example if using dbt_expectations
+
+      - name: metric_rank
+        description: "The rank of the entity within its dimension for the specified metric in the current quarter (1 = best performance). Lower rank is better for acquisition_cost, higher is better for others."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1
+              # max_value depends on total_entities, so a fixed max isn't ideal. Ensuring > 0 is key.
+
+      - name: total_entities
+        description: "The total number of unique entities within the dimension for the current quarter."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1
+
+      - name: campaign_count
+        description: "The number of campaigns associated with this entity in the current quarter."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0 # An entity might exist but have 0 campaigns in the current quarter if joined from previous data
+
+      - name: prev_metric_value
+        description: "The calculated value of the specified metric for the entity in the previous quarter. NULL if no data exists for the previous quarter."
+        # No not_null test as previous data might not exist
+
+      - name: metric_qoq_change
+        description: "The percentage change in the metric value from the previous quarter to the current quarter ((current - previous) / previous). NULL if previous data is missing or zero. Note: For Acquisition Cost, a positive change means cost increased (worse), negative means cost decreased (better)."
+        # No not_null test as previous data might not exist or be zero
+
+      - name: trend
+        description: "Categorical assessment of the performance change based on QoQ change ('improved', 'declined', 'unchanged', 'no_previous_data'). 'Improved' means better performance (higher ROI/CTR/Conversion Rate, lower Acquisition Cost)."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['improved', 'declined', 'unchanged', 'no_previous_data']
+
+      - name: current_window_start_month
+        description: "The starting month number (1-12) of the current analysis period (last 3 months)."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+      - name: current_window_end_month
+        description: "The ending month number (1-12) of the current analysis period (last 3 months)."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+      - name: previous_window_start_month
+        description: "The starting month number (1-12) of the previous analysis period (3 months prior to current)."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [-2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9] # Allows for wrap-around year boundaries
+
+      - name: previous_window_end_month
+        description: "The ending month number (1-12) of the previous analysis period (3 months prior to current)."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]

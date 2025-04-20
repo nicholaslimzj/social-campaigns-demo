@@ -1,0 +1,160 @@
+---
+# Dashboard to Tables Mapping
+# This document maps each visualization on the dashboard to its corresponding data source table(s)
+
+overview_tab:
+  kpi_cards:
+    description: "Top KPI Cards (Conversion Rate, ROI, Acquisition Cost, CTR, Campaign Count)"
+    data_source: "campaign_monthly_metrics.sql"
+    notes: "Provides both current values and month-over-month comparisons"
+
+  conversion_rate_trends:
+    description: "Conversion Rate Trends (Line chart with anomaly)"
+    data_source: "metrics_monthly_anomalies.sql"
+    notes: "Provides trend data with anomaly detection"
+
+  roi_trends:
+    description: "ROI Trends (Line chart)"
+    data_source: "campaign_monthly_metrics.sql"
+    notes: "Provides monthly trend data for ROI"
+
+  top_performing_audiences:
+    description: "Top Performing Target Audience (Table)"
+    data_source: "audience_quarter_performance_matrix.sql"
+    notes: "Shows top performing target audiences with key metrics"
+    
+  top_performing_channels:
+    description: "Top Performing Channels (Table)"
+    data_source: "channel_quarter_performance_matrix.sql"
+    notes: "Shows top performing channels with key metrics"
+
+campaign_analysis_tab:
+  # Campaign Performance Matrix removed as per request
+  
+  campaign_duration_impact:
+    description: "Campaign Duration Impact (Scatter plot)"
+    data_source: "campaign_duration_quarter_analysis.sql"
+    notes: "Shows relationship between campaign duration and performance"
+    
+  campaign_goals_analysis:
+    description: "Campaign Goals Analysis (Bar chart)"
+    data_source: "goal_quarter_metrics.sql"
+    notes: "Shows performance metrics by campaign goal"
+    
+  campaign_performance_timeline:
+    description: "Campaign Performance Timeline (Interactive timeline)"
+    data_source: "campaign_monthly_metrics.sql"
+    notes: "Shows campaign performance over time with interactive elements"
+    
+  winning_campaign_combinations:
+    description: "Winning Campaign Combinations (Table)"
+    data_source: "campaign_quarter_clusters.sql"
+    notes: "Shows optimal combinations of goal, target audience, channel, and duration"
+    
+  top_bottom_performers:
+    description: "Top & Bottom Performers (Bar charts)"
+    data_source: "stg_campaigns"
+    notes: "Uses direct calculations on staging data for ranking"
+    
+  campaign_anomalies:
+    description: "Campaign Anomalies (Timeline)"
+    data_source: "metrics_monthly_anomalies.sql"
+    notes: "Needs alternative visualization to better display anomaly data"
+    
+  campaign_forecasting:
+    description: "Campaign Performance Forecasting"
+    data_source: "campaign_future_forecast.sql"
+    notes: "Provides forecasted performance metrics"
+
+channel_analysis_tab:
+  channel_roi_vs_acquisition_cost:
+    description: "Channel ROI vs Acquisition Cost (Bubble chart)"
+    data_source: "channel_quarter_performance_matrix.sql"
+    notes: "Visualizes the relationship between ROI and acquisition cost by channel"
+    
+  channel_mix_analysis:
+    description: "Channel Mix Analysis (Pie chart)"
+    data_source: "channel_quarter_performance_matrix.sql"
+    notes: "Shows distribution of spend and performance across channels"
+    
+  channel_conversion_trends:
+    description: "Channel Conversion Trends (Line chart)"
+    data_source: "channel_monthly_metrics.sql"
+    notes: "Shows conversion rate trends over time by channel"
+    
+  channel_effectiveness_comparison:
+    description: "Channel Effectiveness Comparison (Bar chart)"
+    data_source: "channel_quarter_performance_matrix.sql"
+    secondary_source: "dimensions_quarter_performance_rankings.sql"
+    notes: "Compares channel performance against industry benchmarks"
+    
+  channel_performance_metrics:
+    description: "Channel Performance Metrics (Table)"
+    data_source: "channel_quarter_performance_matrix.sql"
+    notes: "Detailed performance metrics for each channel"
+    
+  channel_by_campaign_goal:
+    description: "Channel by Campaign Goal (Heatmap)"
+    data_source: "channel_quarter_performance_matrix.sql"
+    notes: "Shows performance by channel across different campaign goals"
+    
+  channel_by_target_audience:
+    description: "Channel by Target Audience (Heatmap)"
+    data_source: "channel_quarter_performance_matrix.sql"
+    notes: "Shows performance by channel across different target audiences"
+    
+  channel_anomalies:
+    description: "Channel Anomalies (Timeline)"
+    data_source: "channel_quarter_anomalies.sql"
+    notes: "Identifies anomalies in channel performance metrics"
+    
+  budget_allocation_optimizer:
+    description: "Budget Allocation Optimizer (Interactive tool)"
+    data_source: "channel_quarter_budget_optimizer.sql"
+    notes: "Recommends optimal budget allocation across channels"
+
+cohort_analysis_tab:
+  # Note: This tab was previously named "Segment" but has been renamed to "Cohort Analysis"
+  # All references to "Segment" have been updated to "Target Audience"
+  
+  target_audience_performance_comparison:
+    description: "Target Audience Performance Comparison (Bar chart)"
+    data_source: "audience_quarter_performance_matrix.sql"
+    notes: "Compares performance metrics across different target audiences"
+    
+  target_audience_roi_trends:
+    description: "Target Audience ROI Trends (Line chart)"
+    data_source: "audience_monthly_metrics.sql"
+    notes: "Shows ROI trends over time by target audience"
+    
+  high_roi_target_audience_clusters:
+    description: "High-ROI Target Audience Clusters (Table)"
+    data_source: "audience_quarter_clusters.sql"
+    notes: "Identifies clusters of high-performing target audiences"
+    status: "Needs to be created"
+    
+  target_audience_performance_by_location:
+    description: "Target Audience Performance by Location (Heatmap)"
+    data_source: "audience_quarter_performance_matrix.sql"
+    notes: "Shows performance by target audience across different locations"
+    
+  target_audience_performance_by_language:
+    description: "Target Audience Performance by Language (Heatmap)"
+    data_source: "audience_quarter_performance_matrix.sql"
+    notes: "Shows performance by target audience across different languages"
+    
+  target_audience_response_by_goal:
+    description: "Target Audience Response by Goal (Bar chart)"
+    data_source: "audience_quarter_performance_matrix.sql"
+    notes: "Shows how different target audiences respond to various campaign goals"
+    
+  target_audience_anomalies:
+    description: "Target Audience Anomalies (Timeline)"
+    data_source: "audience_quarter_anomalies.sql"
+    notes: "Identifies anomalies in target audience performance metrics"
+    
+  target_audience_industry_benchmarks:
+    description: "Target Audience Industry Benchmarks (Table)"
+    data_source: "dimensions_quarter_performance_rankings.sql"
+    secondary_source: "segment_company_quarter_rankings.sql"
+    notes: "Compares target audience performance against industry benchmarks"

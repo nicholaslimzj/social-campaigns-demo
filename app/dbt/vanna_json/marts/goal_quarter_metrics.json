@@ -1,0 +1,218 @@
+{
+  "name": "goal_quarter_metrics",
+  "description": "Aggregates campaign performance metrics by company and campaign goal for the current quarter (latest 3 months of data).\nThis model provides a strategic view of performance, focusing on Company as the primary dimension and Campaign_Goal as the secondary.\nIt calculates key metrics, quarter-over-quarter changes, ranks goals within companies, normalizes performance using z-scores,\nand assigns a composite performance score and tier. Designed for dashboard usage like Campaign Goals Analysis and ROI Analysis.\n",
+  "columns": [
+    {
+      "name": "Company",
+      "type": "VARCHAR",
+      "description": "Identifier for the company associated with the campaign metrics. Primary dimension.",
+      "tests": [
+        "not_null",
+        "relationships",
+        "dbt_utils.unique_combination_of_columns"
+      ],
+      "tags": []
+    },
+    {
+      "name": "goal",
+      "type": "VARCHAR",
+      "description": "The specific goal of the campaigns being aggregated (e.g., Brand Awareness, Increase Sales). Secondary dimension. Aliased from Campaign_Goal.",
+      "tests": [
+        "not_null",
+        "relationships"
+      ],
+      "tags": []
+    },
+    {
+      "name": "campaign_count",
+      "type": "BIGINT",
+      "description": "The total number of campaigns contributing to this company-goal combination in the current quarter.",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_conversion_rate",
+      "type": "DOUBLE",
+      "description": "Average conversion rate for campaigns under this company and goal in the current quarter.",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_roi",
+      "type": "DOUBLE",
+      "description": "Average Return on Investment (ROI) for campaigns under this company and goal in the current quarter.",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "avg_acquisition_cost",
+      "type": "DOUBLE",
+      "description": "Average cost to acquire a customer/conversion for campaigns under this company and goal in the current quarter.",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "ctr",
+      "type": "FLOAT",
+      "description": "Click-Through Rate (Total Clicks / Total Impressions) for campaigns under this company and goal in the current quarter. Can be NULL if total impressions are zero.",
+      "tests": [
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "total_clicks",
+      "type": "HUGEINT",
+      "description": "Sum of all clicks for campaigns under this company and goal in the current quarter.",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "total_impressions",
+      "type": "HUGEINT",
+      "description": "Sum of all impressions for campaigns under this company and goal in the current quarter.",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "total_spend",
+      "type": "DOUBLE",
+      "description": "Calculated total spend (SUM(Clicks * Acquisition_Cost)) for campaigns under this company and goal in the current quarter.",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "total_revenue",
+      "type": "DOUBLE",
+      "description": "Calculated total revenue (SUM(Clicks * Acquisition_Cost * ROI)) for campaigns under this company and goal in the current quarter.",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "roi_vs_prev_quarter",
+      "type": "DOUBLE",
+      "description": "Percentage change in average ROI compared to the previous quarter. NULL if previous quarter data is unavailable or previous ROI was zero.",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "conversion_rate_vs_prev_quarter",
+      "type": "DOUBLE",
+      "description": "Percentage change in average conversion rate compared to the previous quarter. NULL if previous quarter data is unavailable or previous rate was zero.",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "acquisition_cost_vs_prev_quarter",
+      "type": "DOUBLE",
+      "description": "Percentage change in average acquisition cost compared to the previous quarter (positive value indicates improvement/lower cost). NULL if previous quarter data is unavailable or previous cost was zero.",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "ctr_vs_prev_quarter",
+      "type": "FLOAT",
+      "description": "Percentage change in CTR compared to the previous quarter. NULL if previous quarter data is unavailable or previous CTR was zero.",
+      "tests": [],
+      "tags": []
+    },
+    {
+      "name": "roi_rank",
+      "type": "BIGINT",
+      "description": "Rank of the campaign goal within the company based on average ROI (descending) for the current quarter. 1 is best.",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "conversion_rate_rank",
+      "type": "BIGINT",
+      "description": "Rank of the campaign goal within the company based on average conversion rate (descending) for the current quarter. 1 is best.",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
+      "tags": []
+    },
+    {
+      "name": "conversion_rate_z_score",
+      "type": "DOUBLE",
+      "description": "Normalized score (z-score) indicating how many standard deviations the goal's average conversion rate is from the company's average conversion rate across all goals. 0 if standard deviation is zero.",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "roi_z_score",
+      "type": "DOUBLE",
+      "description": "Normalized score (z-score) indicating how many standard deviations the goal's average ROI is from the company's average ROI across all goals. 0 if standard deviation is zero.",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "ctr_z_score",
+      "type": "DOUBLE",
+      "description": "Normalized score (z-score) indicating how many standard deviations the goal's CTR is from the company's average CTR across all goals. 0 if standard deviation is zero.",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "cost_efficiency_z_score",
+      "type": "DOUBLE",
+      "description": "Normalized score (z-score) indicating cost efficiency. Calculated as the negative z-score of average acquisition cost (higher score means lower cost relative to the company average). 0 if standard deviation is zero.",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "composite_performance_score",
+      "type": "DOUBLE",
+      "description": "Weighted average of the z-scores for conversion rate (35%), ROI (35%), CTR (15%), and cost efficiency (15%), providing an overall performance indicator relative to the company average.",
+      "tests": [
+        "not_null"
+      ],
+      "tags": []
+    },
+    {
+      "name": "performance_tier",
+      "type": "VARCHAR",
+      "description": "Categorical tier ('Exceptional', 'High Performing', 'Average', 'Underperforming', 'Poor') assigned based on the composite performance score.",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    }
+  ],
+  "tags": []
+}

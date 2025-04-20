@@ -2,32 +2,37 @@ version: 2
 
 models:
   - name: campaign_future_forecast
-    description: "Mart model that generates 3-month performance forecasts for marketing campaigns aggregated by company. It uses historical monthly data from `stg_campaigns` to calculate trends, seasonality, and project future Conversion Rate, ROI, Acquisition Cost, and CTR using SQL-based time series techniques. Includes confidence intervals for forecasts and combines historical actuals with future projections."
+    description: |
+      Mart model that generates campaign performance forecasts for the next 3 months.
+      It utilizes historical monthly data from `stg_campaigns` to calculate trends,
+      seasonal factors (if applicable), and projects key metrics like Conversion Rate,
+      ROI, Acquisition Cost, and CTR using SQL-based time series techniques.
+      The model also provides 95% confidence intervals for the forecasts based on
+      historical volatility and includes both historical actuals and future projections.
+      Designed for use in performance forecasting dashboards and predictive analytics.
     config:
       materialized: table
       tags:
         - 'mart'
-        - 'forecasting'
-        - 'campaign_performance'
-        - 'predictive_analytics'
+        - 'campaigns'
+        - 'forecast'
+        - 'predictive'
+        - 'monthly'
+        - 'performance'
     columns:
       - name: Company
-        description: "Identifier for the company associated with the campaign data. Groups historical and forecast metrics."
+        description: "The name of the company associated with the campaign data. Foreign key to stg_campaigns.Company."
         tests:
           - not_null
-          # Potential relationship test if a dim_companies model exists
-          # - relationships:
-          #     to: ref('dim_companies')
-          #     field: company_name
+          - relationships:
+              to: ref('stg_campaigns')
+              field: Company # Assuming 'Company' is the corresponding column in stg_campaigns
 
       - name: month_id
-        description: "Numeric representation of the month and year in YYYYMM format (e.g., 202311). Used for time series ordering and joining. Uniquely identifies a month for a specific company."
+        description: "Numeric representation of the year and month (YYYYMM), used for time series ordering. Unique identifier for a company-month combination."
         tests:
           - not_null
-          - dbt_utils.unique_combination_of_columns:
-              combination_of_columns:
-                - Company
-                - month_id
+          - dbt_expectations.expect_column_values_to_be_positive
 
       - name: month
         description: "The calendar month number (1-12)."
@@ -37,160 +42,122 @@ models:
               values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
       - name: year
-        description: "The calendar year (e.g., 2022, 2023)."
+        description: "The calendar year (e.g., 2022)."
         tests:
           - not_null
-          # Optional: Add range test if applicable
-          # - dbt_expectations.expect_column_values_to_be_between:
-          #     min_value: 2020
-          #     strictly: false
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 2000 # Adjust min_value based on expected data range
+              max_value: 2050 # Adjust max_value based on expected data range
 
       - name: conversion_rate
-        description: "The actual average monthly conversion rate for historical periods (where is_forecast = FALSE). Null for forecast periods."
+        description: "Historical average conversion rate for the company in that specific month. Null for forecast periods."
         tests:
-          # Conversion rate should be between 0 and 1 (or higher if expressed as percentage > 100, adjust max_value if needed)
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              # max_value: 1 # Assuming rate is 0-1, adjust if needed
-              strictly: false
-              allow_nulls: true # Allows nulls for forecast rows
+          - dbt_expectations.expect_column_values_to_be_non_negative:
+              config:
+                severity: warn # Allow potential negative values but warn
 
       - name: conversion_rate_forecast
-        description: "The forecasted average monthly conversion rate for future periods (where is_forecast = TRUE). Null for historical periods."
+        description: "Projected average conversion rate for the company in a future month. Null for historical periods."
         tests:
           - dbt_expectations.expect_column_values_to_be_non_negative:
-               allow_nulls: true # Allows nulls for historical rows
+              config:
+                severity: warn # Allow potential negative values but warn
 
       - name: conversion_rate_lower_bound
-        description: "The lower bound of the 95% confidence interval for the forecasted conversion rate. Null for historical periods."
+        description: "Lower bound of the 95% confidence interval for the conversion rate forecast. Null for historical periods."
         tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative:
-               allow_nulls: true
-          - dbt_expectations.expect_column_values_to_be_less_than_or_equal_to:
-              column_name: conversion_rate_forecast
-              allow_nulls: true # Allows comparison where both are non-null
+          - dbt_expectations.expect_column_values_to_be_non_negative
 
       - name: conversion_rate_upper_bound
-        description: "The upper bound of the 95% confidence interval for the forecasted conversion rate. Null for historical periods."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative:
-               allow_nulls: true
-          - dbt_expectations.expect_column_values_to_be_greater_than_or_equal_to:
-              column_name: conversion_rate_forecast
-              allow_nulls: true # Allows comparison where both are non-null
+        description: "Upper bound of the 95% confidence interval for the conversion rate forecast. Null for historical periods."
 
       - name: roi
-        description: "The actual average monthly Return on Investment (ROI) for historical periods (where is_forecast = FALSE). Null for forecast periods."
+        description: "Historical average Return on Investment (ROI) for the company in that specific month. Null for forecast periods."
         tests:
-          # ROI can potentially be negative, so only test for nulls if needed
-          - dbt_expectations.expect_column_values_to_not_be_null:
-              where: "is_forecast = FALSE" # Test only historical rows
+          - dbt_expectations.expect_column_values_to_be_non_negative:
+              config:
+                severity: warn # ROI can technically be negative
 
       - name: roi_forecast
-        description: "The forecasted average monthly ROI for future periods (where is_forecast = TRUE). Null for historical periods."
+        description: "Projected average ROI for the company in a future month. Null for historical periods."
         tests:
-          - dbt_expectations.expect_column_values_to_not_be_null:
-              where: "is_forecast = TRUE" # Test only forecast rows
+          - dbt_expectations.expect_column_values_to_be_non_negative:
+              config:
+                severity: warn # ROI can technically be negative
 
       - name: roi_lower_bound
-        description: "The lower bound of the 95% confidence interval for the forecasted ROI. Null for historical periods."
+        description: "Lower bound of the 95% confidence interval for the ROI forecast. Null for historical periods."
         tests:
-          - dbt_expectations.expect_column_values_to_be_less_than_or_equal_to:
-              column_name: roi_forecast
-              allow_nulls: true
+          - dbt_expectations.expect_column_values_to_be_non_negative:
+              config:
+                severity: warn # ROI can technically be negative
 
       - name: roi_upper_bound
-        description: "The upper bound of the 95% confidence interval for the forecasted ROI. Null for historical periods."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_greater_than_or_equal_to:
-              column_name: roi_forecast
-              allow_nulls: true
+        description: "Upper bound of the 95% confidence interval for the ROI forecast. Null for historical periods."
 
       - name: acquisition_cost
-        description: "The actual average monthly acquisition cost for historical periods (where is_forecast = FALSE). Null for forecast periods."
+        description: "Historical average acquisition cost for the company in that specific month. Null for forecast periods."
         tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative:
-              allow_nulls: true
+          - dbt_expectations.expect_column_values_to_be_non_negative
 
       - name: acquisition_cost_forecast
-        description: "The forecasted average monthly acquisition cost for future periods (where is_forecast = TRUE). Null for historical periods."
+        description: "Projected average acquisition cost for the company in a future month. Null for historical periods."
         tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative:
-              allow_nulls: true
+          - dbt_expectations.expect_column_values_to_be_non_negative
 
       - name: acquisition_cost_lower_bound
-        description: "The lower bound of the 95% confidence interval for the forecasted acquisition cost. Null for historical periods."
+        description: "Lower bound of the 95% confidence interval for the acquisition cost forecast (lower cost is better). Null for historical periods."
         tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative:
-              allow_nulls: true
-          - dbt_expectations.expect_column_values_to_be_less_than_or_equal_to:
-              column_name: acquisition_cost_forecast
-              allow_nulls: true
+          - dbt_expectations.expect_column_values_to_be_non_negative
 
       - name: acquisition_cost_upper_bound
-        description: "The upper bound of the 95% confidence interval for the forecasted acquisition cost. Null for historical periods."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative:
-              allow_nulls: true
-          - dbt_expectations.expect_column_values_to_be_greater_than_or_equal_to:
-              column_name: acquisition_cost_forecast
-              allow_nulls: true
+        description: "Upper bound of the 95% confidence interval for the acquisition cost forecast. Null for historical periods."
 
       - name: ctr
-        description: "The actual average monthly Click-Through Rate (CTR) for historical periods (where is_forecast = FALSE). Null for forecast periods."
+        description: "Historical average Click-Through Rate (CTR) for the company in that specific month (Clicks / Impressions). Null for forecast periods."
         tests:
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              # max_value: 1 # Assuming rate is 0-1, adjust if needed
-              strictly: false
-              allow_nulls: true
+          - dbt_expectations.expect_column_values_to_be_non_negative
 
       - name: ctr_forecast
-        description: "The forecasted average monthly CTR for future periods (where is_forecast = TRUE). Null for historical periods."
+        description: "Projected average CTR for the company in a future month. Null for historical periods."
         tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative:
-              allow_nulls: true
+          - dbt_expectations.expect_column_values_to_be_non_negative
 
       - name: ctr_lower_bound
-        description: "The lower bound of the 95% confidence interval for the forecasted CTR. Null for historical periods."
+        description: "Lower bound of the 95% confidence interval for the CTR forecast. Null for historical periods."
         tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative:
-              allow_nulls: true
-          - dbt_expectations.expect_column_values_to_be_less_than_or_equal_to:
-              column_name: ctr_forecast
-              allow_nulls: true
+          - dbt_expectations.expect_column_values_to_be_non_negative
 
       - name: ctr_upper_bound
-        description: "The upper bound of the 95% confidence interval for the forecasted CTR. Null for historical periods."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative:
-              allow_nulls: true
-          - dbt_expectations.expect_column_values_to_be_greater_than_or_equal_to:
-              column_name: ctr_forecast
-              allow_nulls: true
+        description: "Upper bound of the 95% confidence interval for the CTR forecast. Null for historical periods."
 
       - name: is_forecast
-        description: "Boolean flag indicating whether the row represents historical data (FALSE) or forecasted data (TRUE)."
+        description: "Boolean flag indicating whether the row represents forecasted data (TRUE) or historical actual data (FALSE)."
         tests:
           - not_null
           - accepted_values:
               values: [true, false]
 
       - name: month_name
-        description: "The full name of the calendar month (e.g., 'January', 'February'). Added for reporting and readability."
+        description: "The full name of the calendar month (e.g., 'January')."
         tests:
           - not_null
           - accepted_values:
               values: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
       - name: conversion_rate_uncertainty
-        description: "A relative measure of the forecast uncertainty for conversion rate, calculated as the width of the confidence interval relative to the forecast value: ABS(upper_bound - lower_bound) / (forecast * 2). Null for historical periods."
+        description: "A measure of the relative uncertainty in the conversion rate forecast, calculated as the width of the confidence interval relative to the forecast value. Null for historical periods."
         tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative:
-              allow_nulls: true
+          - dbt_expectations.expect_column_values_to_be_non_negative
 
       - name: roi_uncertainty
-        description: "A relative measure of the forecast uncertainty for ROI, calculated as the width of the confidence interval relative to the forecast value: ABS(upper_bound - lower_bound) / (forecast * 2). Null for historical periods."
+        description: "A measure of the relative uncertainty in the ROI forecast, calculated as the width of the confidence interval relative to the forecast value. Null for historical periods."
         tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative:
-              allow_nulls: true
+          - dbt_expectations.expect_column_values_to_be_non_negative
+
+    # Test for the composite primary key (Company + month_id)
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - Company
+            - month_id

@@ -1,0 +1,247 @@
+version: 2
+
+models:
+  - name: audience_quarter_clusters
+    description: |
+      Identifies and analyzes high-performing target audience clusters for the current quarter (last 3 months of available data).
+      This model groups campaigns by Company, Target_Audience, Location, Channel, and Goal to form clusters.
+      It calculates key performance indicators (KPIs) like average ROI, conversion rate, CTR, and acquisition cost for each cluster.
+      Clusters are then scored using normalized z-scores against company averages, ranked within their company and audience segment, and assigned performance tiers with recommended actions.
+      The goal is to highlight the most effective combinations of targeting dimensions for strategic decision-making and budget allocation.
+      This model powers the 'High-ROI Target Audience Clusters' visualization in the Cohort Analysis dashboard tab.
+    config:
+      materialized: table
+      tags:
+        - 'mart'
+        - 'marketing'
+        - 'cohort_analysis'
+        - 'quarterly'
+        - 'performance'
+    columns:
+      - name: Company
+        description: "The name of the company associated with the campaign cluster. This serves as the primary dimension for analysis."
+        tests:
+          - not_null
+          # Test the combination that defines a unique cluster
+          - dbt_utils.unique_combination_of_columns:
+              combination_of_columns:
+                - Company
+                - Target_Audience
+                - Location
+                - channel
+                - goal
+          - relationships:
+              to: ref('stg_campaigns')
+              field: Company
+
+      - name: Target_Audience
+        description: "The specific audience segment targeted by the campaigns within the cluster. This serves as the secondary dimension."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_campaigns')
+              field: Target_Audience
+
+      - name: Location
+        description: "The geographical location associated with the campaigns in the cluster."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_campaigns')
+              field: Location
+
+      - name: channel
+        description: "The marketing channel used for the campaigns in the cluster (e.g., Facebook, Twitter, Instagram). Renamed from source column 'Channel_Used'."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_campaigns')
+              field: Channel_Used # Assuming this is the corresponding column name in stg_campaigns
+
+      - name: goal
+        description: "The primary objective of the campaigns within the cluster (e.g., Increase Sales, Brand Awareness). Renamed from source column 'Campaign_Goal'."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_campaigns')
+              field: Campaign_Goal # Assuming this is the corresponding column name in stg_campaigns
+
+      - name: campaign_count
+        description: "The number of individual campaigns included in this specific cluster combination for the quarter. Clusters with less than 3 campaigns are excluded for statistical significance."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_great_or_equal_to:
+              value: 3
+
+      - name: avg_conversion_rate
+        description: "The average conversion rate (conversions / clicks or impressions, depending on definition) across all campaigns within the cluster for the quarter."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              # Max value can exceed 1 in some conversion definitions, but typically <= 1 for click-based rates. Adjust if needed.
+              max_value: 1
+              strictly: false
+
+      - name: avg_roi
+        description: "The average Return on Investment (ROI) across all campaigns within the cluster for the quarter. Calculated as (Revenue - Spend) / Spend."
+        tests:
+          - not_null
+
+      - name: avg_acquisition_cost
+        description: "The average cost to acquire a customer or achieve a conversion goal (Spend / Conversions) across campaigns in the cluster for the quarter."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_great_or_equal_to:
+              value: 0
+
+      - name: avg_ctr
+        description: "The average Click-Through Rate (Clicks / Impressions) across campaigns in the cluster for the quarter. Calculated as SUM(Clicks) / SUM(Impressions)."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+              strictly: false
+
+      - name: total_spend
+        description: "The total calculated advertising spend for all campaigns within the cluster for the quarter. Calculated as SUM(Clicks * Acquisition_Cost) based on available data."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_great_or_equal_to:
+              value: 0
+
+      - name: total_revenue
+        description: "The total calculated revenue generated by all campaigns within the cluster for the quarter. Calculated as SUM(Clicks * Acquisition_Cost * ROI) based on available data."
+        tests:
+          - not_null
+          # Revenue can theoretically be negative if costs exceed gains significantly, but usually non-negative.
+          # - dbt_expectations.expect_column_values_to_be_great_or_equal_to:
+          #     value: 0
+
+      - name: avg_audience_conversion_rate
+        description: "The average conversion rate for all clusters belonging to the same Company and Target Audience combination within the quarter. Used for comparison within the audience segment."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1 # Assuming similar constraints as avg_conversion_rate
+              strictly: false
+
+      - name: avg_audience_roi
+        description: "The average ROI for all clusters belonging to the same Company and Target Audience combination within the quarter. Used for comparison within the audience segment."
+        tests:
+          - not_null
+
+      - name: avg_audience_ctr
+        description: "The average CTR for all clusters belonging to the same Company and Target Audience combination within the quarter. Used for comparison within the audience segment."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+              strictly: false
+
+      - name: avg_audience_acquisition_cost
+        description: "The average acquisition cost for all clusters belonging to the same Company and Target Audience combination within the quarter. Used for comparison within the audience segment."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_great_or_equal_to:
+              value: 0
+
+      - name: cluster_count
+        description: "The total number of distinct clusters (Company, Target_Audience, Location, Channel, Goal combinations) found for this specific Company and Target Audience pair within the quarter."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_great_or_equal_to:
+              value: 1
+
+      - name: conversion_rate_z_score
+        description: "The normalized z-score for the cluster's average conversion rate compared to the company's average and standard deviation for the quarter. Indicates performance relative to the company average (higher is better)."
+        tests:
+          - not_null
+
+      - name: roi_z_score
+        description: "The normalized z-score for the cluster's average ROI compared to the company's average and standard deviation for the quarter. Indicates performance relative to the company average (higher is better)."
+        tests:
+          - not_null
+
+      - name: ctr_z_score
+        description: "The normalized z-score for the cluster's average CTR compared to the company's average and standard deviation for the quarter. Indicates performance relative to the company average (higher is better)."
+        tests:
+          - not_null
+
+      - name: cost_efficiency_z_score
+        description: "The normalized z-score for the cluster's cost efficiency (lower acquisition cost is better), compared to the company average and standard deviation for the quarter. Calculated with an inverse relationship so higher scores indicate better cost efficiency."
+        tests:
+          - not_null
+
+      - name: composite_performance_score
+        description: "A weighted score combining the z-scores of conversion rate (35%), ROI (35%), CTR (15%), and cost efficiency (15%) to provide an overall performance measure for the cluster relative to the company average."
+        tests:
+          - not_null
+
+      - name: roi_rank
+        description: "The rank of this cluster within its Company based on average ROI (descending) for the quarter. Rank 1 indicates the highest ROI within the company."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_great_or_equal_to:
+              value: 1
+
+      - name: conversion_rate_rank
+        description: "The rank of this cluster within its Company based on average conversion rate (descending) for the quarter. Rank 1 indicates the highest conversion rate within the company."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_great_or_equal_to:
+              value: 1
+
+      - name: acquisition_cost_rank
+        description: "The rank of this cluster within its Company based on average acquisition cost (ascending) for the quarter. Rank 1 indicates the lowest acquisition cost (most efficient) within the company."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_great_or_equal_to:
+              value: 1
+
+      - name: audience_roi_rank
+        description: "The rank of this cluster within its Company and Target Audience group based on average ROI (descending) for the quarter. Rank 1 indicates the highest ROI within that specific audience segment."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_great_or_equal_to:
+              value: 1
+
+      - name: audience_conversion_rate_rank
+        description: "The rank of this cluster within its Company and Target Audience group based on average conversion rate (descending) for the quarter. Rank 1 indicates the highest conversion rate within that specific audience segment."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_great_or_equal_to:
+              value: 1
+
+      - name: roi_percentile
+        description: "The percentile rank of the cluster's ROI within its Company for the quarter (calculated based on roi_rank / total_clusters). Values range from ~0 to 1, where lower values indicate better relative ROI performance compared to other clusters in the same company."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+              strictly: false # Rank 1 / N can be small but > 0, Rank N / N = 1
+
+      - name: is_high_performing_cluster
+        description: "A boolean flag indicating if the cluster ranks in the top 10% based on the composite performance score within its Company for the quarter (TRUE if top 10%, FALSE otherwise)."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [ true, false ]
+
+      - name: performance_tier
+        description: "A categorical tier assigned based on the composite performance score ('Exceptional', 'High Performing', 'Average', 'Underperforming', 'Poor'). Provides a quick assessment of the cluster's overall relative performance."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Exceptional', 'High Performing', 'Average', 'Underperforming', 'Poor']
+
+      - name: recommended_action
+        description: "A suggested action based on the performance tier (e.g., 'Increase investment', 'Monitor and optimize', 'Consider discontinuing'). Aims to guide strategic decisions regarding resource allocation for this cluster."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Increase investment', 'Maintain or increase', 'Monitor and optimize', 'Reduce investment', 'Consider discontinuing']

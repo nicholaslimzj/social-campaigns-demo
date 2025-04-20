@@ -1,0 +1,35 @@
+Used tables
+
+campaign_monthly_metrics
+campaigns
+dimensions_quarterly_performance (needs to include target audience, change name from quarterly to)
+campaign_historical_clusters (change to quarterly)
+campaign_historical_performance_matrix (change to quarterly)
+metrics_monthly_trends (change to something to track company + another dimension monthly trends)
+audience_historical_metrics (change to quarterly)
+
+
+delete monthly_metrics_trends
+
+
+Existing
+
+campaign_duration_historical_analysis (for campaigns analysis)
+campaign_future_forecast (for campaigns analysis)
+campaign_historical_clusters (for campaigns analysis)
+campaign_monthly_metrics (for main summary) 
+dimensions_quarterly_performance_rankings (for main summary) (needs to include target audience)
+metrics_historical_anomalies (for campaigns analysis)
+segment_company_historical_rankings (for segment analytics)
+
+
+New
+audience_performance_matrix (for segment analytics)
+audience_monthly_anomalies (for segment analytics)
+
+Delete
+metrics_monthly_trends (to delete)
+campaign_historical_performance_matrix (for campaigns analysis) (to delete)
+segment_historical_metrics (for comparison) (to quarterly)
+audience_historical_metrics (for comparison) (to quarterly)
+channel_historical_metrics (for comparison) (to quarterly)
