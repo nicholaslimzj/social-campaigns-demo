@@ -34,6 +34,8 @@ monthly_data AS (
         Company,
         EXTRACT(MONTH FROM CAST(Date AS DATE)) as month,
         {{ agg_metrics() }},
+        -- Sum of acquisition costs for accurate spend calculation
+        SUM(Acquisition_Cost) as total_acquisition_cost,
         -- Calculate company-specific month-over-month changes
         LAG(avg_roi) OVER (PARTITION BY Company ORDER BY EXTRACT(MONTH FROM CAST(Date AS DATE))) as prev_month_roi,
         LAG(avg_conversion_rate) OVER (PARTITION BY Company ORDER BY EXTRACT(MONTH FROM CAST(Date AS DATE))) as prev_month_conversion_rate,
@@ -54,8 +56,8 @@ SELECT
     total_clicks,
     total_impressions,
     -- Calculate company-specific spend and revenue
-    total_clicks * avg_acquisition_cost as total_spend,
-    total_clicks * avg_acquisition_cost * avg_roi as total_revenue,
+    total_acquisition_cost as total_spend,
+    total_acquisition_cost * avg_roi as total_revenue,
     -- Calculate company-specific month-over-month percentage changes
     CASE 
         WHEN prev_month_roi IS NULL THEN NULL

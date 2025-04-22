@@ -77,16 +77,94 @@ def get_company_channels(company_id: str, include_metrics: bool = False) -> Dict
     # and maintains the hierarchical dimension structure with Company as primary dimension
     if include_metrics:
         query = """
+        WITH company_metrics AS (
+            SELECT 
+                Channel_Used as channel_id,
+                campaign_count,
+                avg_conversion_rate,
+                avg_roi,
+                avg_acquisition_cost,
+                quarterly_ctr as avg_ctr,
+                has_anomaly,
+                anomaly_impact,
+                anomaly_count
+            FROM channel_quarter_anomalies
+            WHERE Company = ?
+        ),
+        -- Get industry benchmarks for all metrics in one CTE
+        industry_benchmarks AS (
+            SELECT 
+                dimension,
+                metric,
+                entity as channel_id,
+                metric_value,
+                metric_rank,
+                total_entities,
+                CAST(metric_rank AS FLOAT) / total_entities as percentile_rank
+            FROM dimensions_quarter_performance_rankings
+            WHERE dimension = 'channel'
+            AND metric IN ('roi', 'conversion_rate', 'acquisition_cost', 'ctr')
+        ),
+        -- Pivot the industry benchmarks to get one row per channel
+        industry_metrics AS (
+            SELECT
+                channel_id,
+                MAX(CASE WHEN metric = 'roi' THEN metric_value END) as industry_roi,
+                MAX(CASE WHEN metric = 'roi' THEN percentile_rank END) as roi_percentile,
+                MAX(CASE WHEN metric = 'conversion_rate' THEN metric_value END) as industry_conversion_rate,
+                MAX(CASE WHEN metric = 'conversion_rate' THEN percentile_rank END) as conversion_percentile,
+                MAX(CASE WHEN metric = 'acquisition_cost' THEN metric_value END) as industry_acquisition_cost,
+                MAX(CASE WHEN metric = 'acquisition_cost' THEN percentile_rank END) as acquisition_percentile,
+                MAX(CASE WHEN metric = 'ctr' THEN metric_value END) as industry_ctr,
+                MAX(CASE WHEN metric = 'ctr' THEN percentile_rank END) as ctr_percentile
+            FROM industry_benchmarks
+            GROUP BY channel_id
+        )
+        -- Join company metrics with industry benchmarks
         SELECT 
-            Channel_Used as channel_id,
-            campaign_count,
-            avg_conversion_rate,
-            avg_roi,
-            avg_acquisition_cost,
-            quarterly_ctr as avg_ctr
-        FROM channel_quarter_anomalies
-        WHERE Company = ?
-        ORDER BY avg_roi DESC
+            c.channel_id,
+            c.campaign_count,
+            c.avg_conversion_rate,
+            c.avg_roi,
+            c.avg_acquisition_cost,
+            c.avg_ctr,
+            c.has_anomaly,
+            c.anomaly_impact,
+            c.anomaly_count,
+            -- Industry benchmarks
+            i.industry_conversion_rate,
+            i.industry_roi,
+            i.industry_acquisition_cost,
+            i.industry_ctr,
+            -- Percentile rankings
+            i.conversion_percentile,
+            i.roi_percentile,
+            i.acquisition_percentile,
+            i.ctr_percentile,
+            -- Performance comparisons
+            CASE 
+                WHEN c.avg_conversion_rate > i.industry_conversion_rate THEN 'above_average'
+                WHEN c.avg_conversion_rate < i.industry_conversion_rate THEN 'below_average'
+                ELSE 'average'
+            END as conversion_performance,
+            CASE 
+                WHEN c.avg_roi > i.industry_roi THEN 'above_average'
+                WHEN c.avg_roi < i.industry_roi THEN 'below_average'
+                ELSE 'average'
+            END as roi_performance,
+            CASE 
+                WHEN c.avg_acquisition_cost < i.industry_acquisition_cost THEN 'above_average'
+                WHEN c.avg_acquisition_cost > i.industry_acquisition_cost THEN 'below_average'
+                ELSE 'average'
+            END as acquisition_performance,
+            CASE 
+                WHEN c.avg_ctr > i.industry_ctr THEN 'above_average'
+                WHEN c.avg_ctr < i.industry_ctr THEN 'below_average'
+                ELSE 'average'
+            END as ctr_performance
+        FROM company_metrics c
+        LEFT JOIN industry_metrics i ON c.channel_id = i.channel_id
+        ORDER BY c.avg_roi DESC
         """
     else:
         query = """
@@ -100,6 +178,57 @@ def get_company_channels(company_id: str, include_metrics: bool = False) -> Dict
     
     try:
         results = execute_query(query, [company_id])
+        
+        # If include_metrics is True, enhance the results with performance tier
+        if include_metrics:
+            for result in results:
+                # Calculate overall performance tier based on benchmark comparisons
+                above_average_count = sum(1 for perf in [
+                    result.get('conversion_performance', ''),
+                    result.get('roi_performance', ''),
+                    result.get('acquisition_performance', ''),
+                    result.get('ctr_performance', '')
+                ] if perf == 'above_average')
+                
+                if above_average_count >= 3:
+                    result['overall_performance'] = 'excellent'
+                elif above_average_count == 2:
+                    result['overall_performance'] = 'good'
+                elif above_average_count == 1:
+                    result['overall_performance'] = 'average'
+                else:
+                    result['overall_performance'] = 'below_average'
+                
+                # Add structured benchmark data
+                result['industry_benchmarks'] = {
+                    'conversion_rate': result.pop('industry_conversion_rate', None),
+                    'roi': result.pop('industry_roi', None),
+                    'acquisition_cost': result.pop('industry_acquisition_cost', None),
+                    'ctr': result.pop('industry_ctr', None)
+                }
+                
+                result['percentiles'] = {
+                    'conversion_rate': result.pop('conversion_percentile', None),
+                    'roi': result.pop('roi_percentile', None),
+                    'acquisition_cost': result.pop('acquisition_percentile', None),
+                    'ctr': result.pop('ctr_percentile', None)
+                }
+                
+                result['performance'] = {
+                    'conversion_rate': result.pop('conversion_performance', None),
+                    'roi': result.pop('roi_performance', None),
+                    'acquisition_cost': result.pop('acquisition_performance', None),
+                    'ctr': result.pop('ctr_performance', None),
+                    'overall': result.pop('overall_performance', None)
+                }
+                
+                # Add anomaly information
+                result['anomaly'] = {
+                    'has_anomaly': result.get('has_anomaly', False),
+                    'impact': result.pop('anomaly_impact', None),
+                    'count': result.pop('anomaly_count', 0)
+                }
+        
         return {"channels": results}
     except Exception as e:
         logger.error(f"Error getting company channels: {str(e)}")
@@ -142,6 +271,15 @@ def get_monthly_channel_metrics(company_id: str) -> Dict[str, List[Dict[str, Any
     
     try:
         results = execute_query(query, [company_id])
+        
+        # Calculate CAC (Customer Acquisition Cost) for each result
+        for result in results:
+            # CAC = Acquisition Cost / (Clicks * Conversion Rate)
+            if result.get('clicks', 0) > 0 and result.get('conversion_rate', 0) > 0:
+                conversions = result['clicks'] * result['conversion_rate']
+                result['cac'] = result['acquisition_cost'] / conversions if conversions > 0 else 0
+            else:
+                result['cac'] = 0
         
         # Group by channel_id
         channels = {}
@@ -187,7 +325,7 @@ def get_channel_performance_matrix(company_id: str, dimension_type: str = "goal"
     
     Args:
         company_id: Company name to get channel performance matrix for
-        dimension_type: Type of dimension to analyze (goal, location, language)
+        dimension_type: Type of dimension to analyze (goal, target_audience)
         
     Returns:
         Dict[str, List[Dict[str, Any]]]: Channel performance matrix for the company

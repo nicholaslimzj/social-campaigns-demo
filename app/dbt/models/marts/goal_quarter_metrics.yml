@@ -3,10 +3,12 @@ version: 2
 models:
   - name: goal_quarter_metrics
     description: |
-      Aggregates campaign performance metrics by company and campaign goal for the current quarter (latest 3 months of data).
-      This model provides a strategic view of performance, focusing on Company as the primary dimension and Campaign_Goal as the secondary.
-      It calculates key metrics, quarter-over-quarter changes, ranks goals within companies, normalizes performance using z-scores,
-      and assigns a composite performance score and tier. Designed for dashboard usage like Campaign Goals Analysis and ROI Analysis.
+      Aggregates campaign performance metrics by company and campaign goal for the current quarter.
+      This model provides a strategic quarterly view, focusing on Company as the primary dimension and Campaign_Goal as the secondary.
+      It calculates key performance indicators (KPIs), quarter-over-quarter changes, ranks goals within companies, normalizes metrics using z-scores,
+      computes a composite performance score, and assigns a performance tier based on the score.
+      Designed for use in dashboards analyzing campaign goal performance, comparisons, and ROI.
+      Time Context: Current Quarter (based on the latest 3 months of data in stg_campaigns).
     config:
       materialized: table
       tags:
@@ -17,89 +19,84 @@ models:
         - 'analytics'
     columns:
       - name: Company
-        description: "Identifier for the company associated with the campaign metrics. Primary dimension."
+        description: "Name of the company associated with the campaign metrics."
         tests:
           - not_null
-          # Test relationship back to the staging source
           - relationships:
               to: ref('stg_campaigns')
               field: Company
-          # Test for uniqueness across the combination of Company and goal for the quarter
+          # Apply the multi-column unique constraint here
           - dbt_utils.unique_combination_of_columns:
               combination_of_columns:
                 - Company
                 - goal
 
       - name: goal
-        description: "The specific goal of the campaigns being aggregated (e.g., Brand Awareness, Increase Sales). Secondary dimension. Aliased from Campaign_Goal."
+        description: "The specific goal of the campaigns being aggregated (e.g., Brand Awareness, Increase Sales)."
         tests:
           - not_null
-          # Test relationship back to the staging source using the original column name
           - relationships:
               to: ref('stg_campaigns')
               field: Campaign_Goal
-          # Optional: Add accepted values if the list of goals is known and fixed
-          # - accepted_values:
-          #     values: ['Brand Awareness', 'Increase Sales', 'Market Expansion', 'Product Launch', ...]
 
       - name: campaign_count
-        description: "The total number of campaigns contributing to this company-goal combination in the current quarter."
+        description: "Number of campaigns contributing to these metrics for the company and goal in the current quarter."
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 0 # A group could theoretically have 0 campaigns if filtered weirdly, but likely >= 1
+              min_value: 0
 
       - name: avg_conversion_rate
-        description: "Average conversion rate for campaigns under this company and goal in the current quarter."
+        description: "Average conversion rate across campaigns for this company and goal in the current quarter."
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 0 # Conversion rate cannot be negative
+              min_value: 0 # Conversion rate should be non-negative
 
       - name: avg_roi
-        description: "Average Return on Investment (ROI) for campaigns under this company and goal in the current quarter."
+        description: "Average Return on Investment (ROI) across campaigns for this company and goal in the current quarter."
         tests:
-          - not_null # ROI can be negative
+          - not_null
 
       - name: avg_acquisition_cost
-        description: "Average cost to acquire a customer/conversion for campaigns under this company and goal in the current quarter."
+        description: "Average acquisition cost across campaigns for this company and goal in the current quarter."
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 0 # Acquisition cost cannot be negative
+              min_value: 0 # Acquisition cost should be non-negative
 
       - name: ctr
-        description: "Click-Through Rate (Total Clicks / Total Impressions) for campaigns under this company and goal in the current quarter. Can be NULL if total impressions are zero."
+        description: "Overall Click-Through Rate (Total Clicks / Total Impressions) for this company and goal in the current quarter. Can be NULL if total impressions are zero."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
               max_value: 1 # CTR is typically between 0 and 1
 
       - name: total_clicks
-        description: "Sum of all clicks for campaigns under this company and goal in the current quarter."
+        description: "Sum of all clicks for campaigns associated with this company and goal in the current quarter."
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 0
 
       - name: total_impressions
-        description: "Sum of all impressions for campaigns under this company and goal in the current quarter."
+        description: "Sum of all impressions for campaigns associated with this company and goal in the current quarter."
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 0
 
       - name: total_spend
-        description: "Calculated total spend (SUM(Clicks * Acquisition_Cost)) for campaigns under this company and goal in the current quarter."
+        description: "Calculated total spend based on clicks, conversion rate, and acquisition cost for this company and goal in the current quarter."
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 0 # Spend cannot be negative
+              min_value: 0 # Spend should generally be non-negative
 
       - name: total_revenue
-        description: "Calculated total revenue (SUM(Clicks * Acquisition_Cost * ROI)) for campaigns under this company and goal in the current quarter."
+        description: "Calculated total revenue based on spend and ROI for this company and goal in the current quarter."
         tests:
-          - not_null # Revenue can be negative if ROI is negative
+          - not_null # Revenue can be negative if ROI is significantly negative
 
       - name: roi_vs_prev_quarter
         description: "Percentage change in average ROI compared to the previous quarter. NULL if previous quarter data is unavailable or previous ROI was zero."
@@ -114,46 +111,36 @@ models:
         description: "Percentage change in CTR compared to the previous quarter. NULL if previous quarter data is unavailable or previous CTR was zero."
 
       - name: roi_rank
-        description: "Rank of the campaign goal within the company based on average ROI (descending) for the current quarter. 1 is best."
+        description: "Rank of this goal's average ROI compared to other goals within the same company for the current quarter (1 = highest ROI)."
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 1
+              min_value: 1 # Rank starts from 1
 
       - name: conversion_rate_rank
-        description: "Rank of the campaign goal within the company based on average conversion rate (descending) for the current quarter. 1 is best."
+        description: "Rank of this goal's average conversion rate compared to other goals within the same company for the current quarter (1 = highest rate)."
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 1
+              min_value: 1 # Rank starts from 1
 
       - name: conversion_rate_z_score
-        description: "Normalized score (z-score) indicating how many standard deviations the goal's average conversion rate is from the company's average conversion rate across all goals. 0 if standard deviation is zero."
-        tests:
-          - not_null
+        description: "Normalized score (z-score) representing how many standard deviations the goal's average conversion rate is from the company's average conversion rate across all goals."
 
       - name: roi_z_score
-        description: "Normalized score (z-score) indicating how many standard deviations the goal's average ROI is from the company's average ROI across all goals. 0 if standard deviation is zero."
-        tests:
-          - not_null
+        description: "Normalized score (z-score) representing how many standard deviations the goal's average ROI is from the company's average ROI across all goals."
 
       - name: ctr_z_score
-        description: "Normalized score (z-score) indicating how many standard deviations the goal's CTR is from the company's average CTR across all goals. 0 if standard deviation is zero."
-        tests:
-          - not_null
+        description: "Normalized score (z-score) representing how many standard deviations the goal's CTR is from the company's average CTR across all goals."
 
       - name: cost_efficiency_z_score
-        description: "Normalized score (z-score) indicating cost efficiency. Calculated as the negative z-score of average acquisition cost (higher score means lower cost relative to the company average). 0 if standard deviation is zero."
-        tests:
-          - not_null
+        description: "Normalized score (z-score) representing cost efficiency (based on inverted acquisition cost) relative to the company average. Higher is better (lower cost)."
 
       - name: composite_performance_score
-        description: "Weighted average of the z-scores for conversion rate (35%), ROI (35%), CTR (15%), and cost efficiency (15%), providing an overall performance indicator relative to the company average."
-        tests:
-          - not_null
+        description: "A weighted average of the z-scores for key metrics (Conversion Rate: 35%, ROI: 35%, CTR: 15%, Cost Efficiency: 15%) indicating overall goal performance relative to the company average."
 
       - name: performance_tier
-        description: "Categorical tier ('Exceptional', 'High Performing', 'Average', 'Underperforming', 'Poor') assigned based on the composite performance score."
+        description: "Categorical tier ('Exceptional', 'High Performing', 'Average', 'Underperforming', 'Poor') based on the composite performance score."
         tests:
           - not_null
           - accepted_values:

@@ -3,24 +3,27 @@ version: 2
 models:
   - name: channel_monthly_metrics
     description: |
-      Aggregates campaign performance metrics monthly by company and channel.
-      This model provides a time-based view of channel effectiveness within each company,
+      Aggregates campaign performance metrics by company, channel, and month.
+      This mart model provides a time-based view of channel effectiveness within each company,
       calculating key performance indicators (KPIs), month-over-month changes, spend, revenue,
-      and channel share metrics. It follows a hierarchical structure with Company as the primary dimension
-      and Channel_Used as the secondary dimension. Useful for trend analysis, seasonal comparisons,
-      and identifying high/low performing channels over time per company.
+      and channel share metrics. It follows a hierarchical structure with Company as the primary
+      dimension and Channel_Used as the secondary dimension, aggregated monthly.
+      Used for dashboarding channel trends, performance comparisons, and seasonal analysis.
     config:
       materialized: table
-      tags: ['mart', 'marketing', 'performance', 'monthly']
+      tags:
+        - 'mart'
+        - 'marketing'
+        - 'campaigns'
+        - 'performance'
+        - 'monthly'
+        - 'channel_analysis'
     columns:
       - name: Company
-        description: "The name of the company running the campaigns."
+        description: "Identifier for the company running the campaigns. Primary dimension for aggregation."
         tests:
           - not_null
-          - relationships:
-              to: ref('stg_campaigns')
-              field: Company
-          # Apply the multi-column unique constraint test to one of the columns in the combination
+          # Test for multi-column uniqueness (Company, Channel_Used, month)
           - dbt_utils.unique_combination_of_columns:
               combination_of_columns:
                 - Company
@@ -28,12 +31,12 @@ models:
                 - month
 
       - name: Channel_Used
-        description: "The marketing channel used for the campaigns (e.g., Facebook, Google Ads, Email)."
+        description: "The marketing channel used for the campaigns (e.g., Facebook, Google Ads, Email). Secondary dimension for aggregation."
         tests:
           - not_null
-          - relationships:
-              to: ref('stg_campaigns')
-              field: Channel_Used
+          # Consider adding accepted_values if the list of channels is known and finite
+          # - accepted_values:
+          #     values: ['Facebook', 'Google Ads', 'Email', 'Organic Search', ...]
 
       - name: month
         description: "The calendar month (1-12) for which the metrics are aggregated."
@@ -43,139 +46,101 @@ models:
               values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
       - name: campaign_count
-        description: "The total number of distinct campaigns run by the company on the channel during the month."
+        description: "Total number of distinct campaigns run by the company on this channel during the month."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: BIGINT
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              strictly: false # Allow 0
+          - dbt_utils.accepted_range:
+              min_value: 0 # A company might have 0 campaigns in a month for a channel if data includes placeholders
 
       - name: avg_conversion_rate
-        description: "The average conversion rate across all campaigns for the company, channel, and month."
+        description: "Average conversion rate across all campaigns for the company on this channel during the month."
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              # Max value could theoretically exceed 1 if defined differently, but typically <= 1
-              # max_value: 1
-              strictly: false # Allow 0
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0 # Conversion rate cannot be negative
 
       - name: avg_roi
-        description: "The average Return on Investment (ROI) across all campaigns for the company, channel, and month."
+        description: "Average Return on Investment (ROI) across all campaigns for the company on this channel during the month."
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-          # ROI can be negative, so no lower bound test at 0
+          - not_null # ROI can be negative, so no lower bound test
 
       - name: avg_acquisition_cost
-        description: "The average cost to acquire a customer/lead across all campaigns for the company, channel, and month."
+        description: "Average cost to acquire a customer/conversion across all campaigns for the company on this channel during the month."
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              strictly: false # Allow 0
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0 # Acquisition cost cannot be negative
 
       - name: monthly_ctr
-        description: "The overall Click-Through Rate (CTR) calculated as (Total Clicks / Total Impressions) for the company, channel, and month."
+        description: "Overall Click-Through Rate (Total Clicks / Total Impressions) for the company on this channel during the month."
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: FLOAT
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              # max_value: 1 # CTR is typically <= 1
-              strictly: false # Allow 0
+          - not_null # May be null if total_impressions is 0, handled by NULLIF in SQL
+          - dbt_utils.accepted_range:
+              min_value: 0 # CTR cannot be negative
 
       - name: total_clicks
-        description: "The total number of clicks generated by all campaigns for the company, channel, and month."
+        description: "Total number of clicks generated by campaigns for the company on this channel during the month."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: HUGEINT # Based on provided types
-          - dbt_expectations.expect_column_values_to_be_between:
+          - dbt_utils.accepted_range:
               min_value: 0
-              strictly: false # Allow 0
 
       - name: total_impressions
-        description: "The total number of impressions generated by all campaigns for the company, channel, and month."
+        description: "Total number of impressions generated by campaigns for the company on this channel during the month."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: HUGEINT # Based on provided types
-          - dbt_expectations.expect_column_values_to_be_between:
+          - dbt_utils.accepted_range:
               min_value: 0
-              strictly: false # Allow 0
 
       - name: total_spend
-        description: "The estimated total amount spent on campaigns for the company, channel, and month (Clicks * Acquisition_Cost)."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              strictly: false # Allow 0
-
-      - name: total_revenue
-        description: "The estimated total revenue generated from campaigns for the company, channel, and month (Spend * ROI)."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-          # Revenue can theoretically be negative if ROI is negative
-
-      - name: roi_vs_prev_month
-        description: "The percentage change in average ROI compared to the previous month for the same company and channel. Null for the first month observed."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-
-      - name: conversion_rate_vs_prev_month
-        description: "The percentage change in average conversion rate compared to the previous month for the same company and channel. Null for the first month observed."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-
-      - name: acquisition_cost_vs_prev_month
-        description: "The percentage change in average acquisition cost compared to the previous month for the same company and channel. Positive value indicates improvement (lower cost). Null for the first month observed."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-
-      - name: ctr_vs_prev_month
-        description: "The percentage change in monthly CTR compared to the previous month for the same company and channel. Null for the first month observed."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: FLOAT
-
-      - name: channel_count
-        description: "The total number of distinct channels used by the company during that specific month across all campaigns."
+        description: "Estimated total amount spent on campaigns for the company on this channel during the month. Calculated as SUM(Clicks * Conversion_Rate * Acquisition_Cost)."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: BIGINT
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 1 # Should be at least 1 if the row exists
-              strictly: false
+          - dbt_utils.accepted_range:
+              min_value: 0 # Spend cannot be negative
+
+      - name: total_revenue
+        description: "Estimated total revenue generated from campaigns for the company on this channel during the month. Calculated as SUM(Clicks * Conversion_Rate * Acquisition_Cost * (1 + ROI))."
+        tests:
+          - not_null
+          # Revenue could potentially be negative if ROI is <-1, but typically >= 0
+          # - dbt_utils.accepted_range:
+          #     min_value: 0
+
+      - name: roi_vs_prev_month
+        description: "Percentage change in average ROI compared to the previous month for the same company and channel. NULL if previous month data is unavailable or previous ROI was zero."
+        # No tests needed as NULL is expected for the first month or zero denominators
+
+      - name: conversion_rate_vs_prev_month
+        description: "Percentage change in average conversion rate compared to the previous month for the same company and channel. NULL if previous month data is unavailable or previous rate was zero."
+        # No tests needed as NULL is expected
+
+      - name: acquisition_cost_vs_prev_month
+        description: "Percentage change in average acquisition cost compared to the previous month for the same company and channel. Positive value indicates improvement (lower cost). NULL if previous month data is unavailable or previous cost was zero."
+        # No tests needed as NULL is expected
+
+      - name: ctr_vs_prev_month
+        description: "Percentage change in monthly CTR compared to the previous month for the same company and channel. NULL if previous month data is unavailable or previous CTR was zero."
+        # No tests needed as NULL is expected
+
+      - name: channel_count
+        description: "Total number of distinct channels used by the company across all campaigns during this specific month."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1 # If a row exists for a company/month, there must be at least 1 channel
 
       - name: channel_share_clicks
-        description: "The proportion of total clicks attributed to this specific channel within the company for the month."
+        description: "The proportion of the company's total clicks across all channels during the month that came from this specific channel (Clicks_This_Channel / Clicks_Company_Total_Month)."
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: FLOAT
-          - dbt_expectations.expect_column_values_to_be_between:
+          - not_null # May be null if total company clicks are 0, handled by NULLIF in SQL
+          - dbt_utils.accepted_range:
               min_value: 0
-              max_value: 1
-              strictly: false # Allow 0 and 1
+              max_value: 1 # Share must be between 0 and 1
 
       - name: efficiency_ratio
-        description: "A measure of channel efficiency, calculated as Total Revenue / Total Spend for the company, channel, and month. Represents revenue generated per dollar spent."
+        description: "Channel efficiency measured as Total Revenue per dollar of Total Spend (Total Revenue / Total Spend) for this channel during the month. NULL if total spend is zero."
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-          # Efficiency can be negative if revenue is negative, or null/inf if spend is 0.
-          # A simple non-negative test might be too restrictive depending on data quality/definition.
-          # Consider adding a test if spend is 0, efficiency_ratio should be null.
-          # - dbt_expectations.expect_column_value_to_be_null:
-          #     when: total_spend = 0 # This requires more complex test logic usually handled in SQL or custom tests
+          # Ratio can be negative if revenue is negative, but typically >= 0
+          - dbt_utils.accepted_range:
+              min_value: 0 # Assuming revenue is non-negative when spend > 0

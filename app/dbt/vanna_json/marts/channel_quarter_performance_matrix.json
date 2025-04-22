@@ -1,6 +1,6 @@
 {
   "name": "channel_quarter_performance_matrix",
-  "description": "Analyzes marketing channel performance metrics for the most recent quarter (last 3 months of available data).\nThe model aggregates data with Channel as the primary dimension, Company as the secondary dimension,\nand further breaks down by Target Audience and Campaign Goal (represented by dimension_type and dimension_value).\nIt calculates key performance indicators (KPIs) like Conversion Rate, ROI, Acquisition Cost, and CTR for each combination.\nCrucially, it provides context by comparing these metrics against channel, company (within channel), dimension (within channel), and global averages.\nA weighted composite score is calculated to rank performance, along with a performance tier classification and a flag for top performers.\nThis model is designed to feed dashboards for channel mix analysis, ROI vs. cost comparisons, and detailed performance breakdowns.\n",
+  "description": "Analyzes marketing channel performance for the current quarter (last 3 months of available data).  Aggregates metrics at the channel, company, target audience, and campaign goal level.  Provides absolute performance metrics (conversion rate, ROI, acquisition cost, CTR),  relative performance comparisons against channel, company, dimension, and global averages,  and calculates a weighted composite score for ranking performance combinations.  Designed for dashboarding channel effectiveness and identifying high/low performers.\n",
   "columns": [
     {
       "name": "Channel_Used",
@@ -9,53 +9,56 @@
       "tests": [
         "not_null",
         "dbt_utils.unique_combination_of_columns",
-        "relationships"
+        "dbt_expectations.expect_column_values_to_be_of_type"
       ],
       "tags": []
     },
     {
       "name": "Company",
       "type": "VARCHAR",
-      "description": "The company associated with the marketing campaign.",
+      "description": "The company associated with the campaign.",
       "tests": [
         "not_null",
-        "relationships"
+        "dbt_expectations.expect_column_values_to_be_of_type"
       ],
       "tags": []
     },
     {
       "name": "dimension_value",
       "type": "VARCHAR",
-      "description": "The specific value of the dimension being analyzed (e.g., 'Brand Awareness', 'All Ages'). Corresponds to either Target_Audience or Campaign_Goal from stg_campaigns based on dimension_type.",
+      "description": "The specific value of the dimension being analyzed (e.g., 'Brand Awareness' if dimension_type is 'goal', or 'All Ages' if dimension_type is 'target_audience').",
       "tests": [
-        "not_null"
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_of_type"
       ],
       "tags": []
     },
     {
       "name": "dimension_type",
       "type": "VARCHAR",
-      "description": "Indicates whether the dimension_value represents a 'target_audience' or a 'goal'.",
+      "description": "The type of dimension being analyzed ('goal' or 'target_audience').",
       "tests": [
         "not_null",
-        "accepted_values"
+        "accepted_values",
+        "dbt_expectations.expect_column_values_to_be_of_type"
       ],
       "tags": []
     },
     {
       "name": "campaign_count",
       "type": "BIGINT",
-      "description": "The total number of campaigns included in this specific channel-company-dimension combination for the quarter.",
+      "description": "The number of distinct campaigns included in this specific combination (Channel, Company, Dimension) for the quarter.",
       "tests": [
         "not_null",
-        "dbt_expectations.expect_column_values_to_be_non_negative"
+        "dbt_expectations.expect_column_values_to_be_non_negative",
+        "dbt_expectations.expect_column_values_to_be_of_type"
       ],
       "tags": []
     },
     {
       "name": "avg_conversion_rate",
       "type": "DOUBLE",
-      "description": "The average conversion rate for campaigns within this combination for the quarter.",
+      "description": "The average conversion rate for this combination over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_between",
         "dbt_expectations.expect_column_values_to_be_of_type"
@@ -65,7 +68,7 @@
     {
       "name": "avg_roi",
       "type": "DOUBLE",
-      "description": "The average Return on Investment (ROI) for campaigns within this combination for the quarter.",
+      "description": "The average Return on Investment (ROI) for this combination over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -74,7 +77,7 @@
     {
       "name": "avg_acquisition_cost",
       "type": "DOUBLE",
-      "description": "The average cost to acquire a customer/lead for campaigns within this combination for the quarter.",
+      "description": "The average cost to acquire a customer/conversion for this combination over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_non_negative",
         "dbt_expectations.expect_column_values_to_be_of_type"
@@ -84,7 +87,7 @@
     {
       "name": "avg_ctr",
       "type": "FLOAT",
-      "description": "The average Click-Through Rate (CTR) for campaigns within this combination for the quarter (Total Clicks / Total Impressions).",
+      "description": "The average Click-Through Rate (CTR) for this combination over the quarter (Total Clicks / Total Impressions).",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_between",
         "dbt_expectations.expect_column_values_to_be_of_type"
@@ -94,8 +97,9 @@
     {
       "name": "total_clicks",
       "type": "HUGEINT",
-      "description": "The total number of clicks generated by campaigns in this combination for the quarter.",
+      "description": "The total number of clicks generated by campaigns in this combination over the quarter.",
       "tests": [
+        "not_null",
         "dbt_expectations.expect_column_values_to_be_non_negative",
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -104,8 +108,9 @@
     {
       "name": "total_impressions",
       "type": "HUGEINT",
-      "description": "The total number of impressions generated by campaigns in this combination for the quarter.",
+      "description": "The total number of impressions generated by campaigns in this combination over the quarter.",
       "tests": [
+        "not_null",
         "dbt_expectations.expect_column_values_to_be_non_negative",
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -114,7 +119,7 @@
     {
       "name": "total_spend",
       "type": "DOUBLE",
-      "description": "The total amount spent on campaigns in this combination for the quarter.",
+      "description": "The estimated total spend for this combination over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_non_negative",
         "dbt_expectations.expect_column_values_to_be_of_type"
@@ -124,7 +129,7 @@
     {
       "name": "total_revenue",
       "type": "DOUBLE",
-      "description": "Estimated total revenue generated from campaigns in this combination for the quarter (derived from spend and ROI).",
+      "description": "The estimated total revenue generated from this combination over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -133,7 +138,7 @@
     {
       "name": "channel_avg_conversion_rate",
       "type": "DOUBLE",
-      "description": "The average conversion rate across all companies and dimensions for this specific channel during the quarter.",
+      "description": "The average conversion rate across all companies and dimensions for this specific channel over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -142,7 +147,7 @@
     {
       "name": "channel_avg_roi",
       "type": "DOUBLE",
-      "description": "The average ROI across all companies and dimensions for this specific channel during the quarter.",
+      "description": "The average ROI across all companies and dimensions for this specific channel over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -151,7 +156,7 @@
     {
       "name": "channel_avg_acquisition_cost",
       "type": "DOUBLE",
-      "description": "The average acquisition cost across all companies and dimensions for this specific channel during the quarter.",
+      "description": "The average acquisition cost across all companies and dimensions for this specific channel over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -160,7 +165,7 @@
     {
       "name": "channel_avg_ctr",
       "type": "DOUBLE",
-      "description": "The average CTR across all companies and dimensions for this specific channel during the quarter.",
+      "description": "The average CTR across all companies and dimensions for this specific channel over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -169,7 +174,7 @@
     {
       "name": "channel_total_spend",
       "type": "DOUBLE",
-      "description": "The total spend across all companies and dimensions for this specific channel during the quarter.",
+      "description": "The total spend across all companies and dimensions for this specific channel over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -178,7 +183,7 @@
     {
       "name": "channel_total_revenue",
       "type": "DOUBLE",
-      "description": "The total estimated revenue across all companies and dimensions for this specific channel during the quarter.",
+      "description": "The total revenue across all companies and dimensions for this specific channel over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -187,7 +192,7 @@
     {
       "name": "company_avg_conversion_rate",
       "type": "DOUBLE",
-      "description": "The average conversion rate for this specific company across all dimensions within this channel during the quarter.",
+      "description": "The average conversion rate across all dimensions for this specific channel and company over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -196,7 +201,7 @@
     {
       "name": "company_avg_roi",
       "type": "DOUBLE",
-      "description": "The average ROI for this specific company across all dimensions within this channel during the quarter.",
+      "description": "The average ROI across all dimensions for this specific channel and company over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -205,7 +210,7 @@
     {
       "name": "company_avg_acquisition_cost",
       "type": "DOUBLE",
-      "description": "The average acquisition cost for this specific company across all dimensions within this channel during the quarter.",
+      "description": "The average acquisition cost across all dimensions for this specific channel and company over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -214,7 +219,7 @@
     {
       "name": "company_avg_ctr",
       "type": "DOUBLE",
-      "description": "The average CTR for this specific company across all dimensions within this channel during the quarter.",
+      "description": "The average CTR across all dimensions for this specific channel and company over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -223,7 +228,7 @@
     {
       "name": "company_total_spend",
       "type": "DOUBLE",
-      "description": "The total spend for this specific company across all dimensions within this channel during the quarter.",
+      "description": "The total spend across all dimensions for this specific channel and company over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -232,7 +237,7 @@
     {
       "name": "company_total_revenue",
       "type": "DOUBLE",
-      "description": "The total estimated revenue for this specific company across all dimensions within this channel during the quarter.",
+      "description": "The total revenue across all dimensions for this specific channel and company over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -241,7 +246,7 @@
     {
       "name": "dimension_avg_conversion_rate",
       "type": "DOUBLE",
-      "description": "The average conversion rate for this specific dimension (goal or audience) across all companies within this channel during the quarter.",
+      "description": "The average conversion rate across all companies for this specific channel and dimension over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -250,7 +255,7 @@
     {
       "name": "dimension_avg_roi",
       "type": "DOUBLE",
-      "description": "The average ROI for this specific dimension (goal or audience) across all companies within this channel during the quarter.",
+      "description": "The average ROI across all companies for this specific channel and dimension over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -259,7 +264,7 @@
     {
       "name": "dimension_avg_acquisition_cost",
       "type": "DOUBLE",
-      "description": "The average acquisition cost for this specific dimension (goal or audience) across all companies within this channel during the quarter.",
+      "description": "The average acquisition cost across all companies for this specific channel and dimension over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -268,7 +273,7 @@
     {
       "name": "dimension_avg_ctr",
       "type": "DOUBLE",
-      "description": "The average CTR for this specific dimension (goal or audience) across all companies within this channel during the quarter.",
+      "description": "The average CTR across all companies for this specific channel and dimension over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -277,7 +282,7 @@
     {
       "name": "global_avg_conversion_rate",
       "type": "DOUBLE",
-      "description": "The global average conversion rate across all channels, companies, and dimensions during the quarter.",
+      "description": "The global average conversion rate across all channels, companies, and dimensions over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -286,7 +291,7 @@
     {
       "name": "global_avg_roi",
       "type": "DOUBLE",
-      "description": "The global average ROI across all channels, companies, and dimensions during the quarter.",
+      "description": "The global average ROI across all channels, companies, and dimensions over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -295,7 +300,7 @@
     {
       "name": "global_avg_acquisition_cost",
       "type": "DOUBLE",
-      "description": "The global average acquisition cost across all channels, companies, and dimensions during the quarter.",
+      "description": "The global average acquisition cost across all channels, companies, and dimensions over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -304,7 +309,7 @@
     {
       "name": "global_avg_ctr",
       "type": "DOUBLE",
-      "description": "The global average CTR across all channels, companies, and dimensions during the quarter.",
+      "description": "The global average CTR across all channels, companies, and dimensions over the quarter.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -313,7 +318,7 @@
     {
       "name": "conversion_rate_vs_channel_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference between this combination's average conversion rate and the channel's average conversion rate. ((Avg / Channel Avg) - 1).",
+      "description": "Percentage difference of this combination's conversion rate compared to the channel average ((Combo CR / Channel CR) - 1).",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -322,7 +327,7 @@
     {
       "name": "roi_vs_channel_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference between this combination's average ROI and the channel's average ROI. ((Avg / Channel Avg) - 1).",
+      "description": "Percentage difference of this combination's ROI compared to the channel average ((Combo ROI / Channel ROI) - 1).",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -331,7 +336,7 @@
     {
       "name": "acquisition_cost_vs_channel_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference measuring how much lower this combination's acquisition cost is compared to the channel average. ((Channel Avg / Avg) - 1). Positive means lower cost (better).",
+      "description": "Percentage difference of this combination's acquisition cost compared to the channel average ((Channel AC / Combo AC) - 1). Higher is better (lower cost).",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -340,7 +345,7 @@
     {
       "name": "ctr_vs_channel_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference between this combination's average CTR and the channel's average CTR. ((Avg / Channel Avg) - 1).",
+      "description": "Percentage difference of this combination's CTR compared to the channel average ((Combo CTR / Channel CTR) - 1).",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -349,7 +354,7 @@
     {
       "name": "conversion_rate_vs_company_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference between this combination's average conversion rate and the company's average conversion rate within this channel. ((Avg / Company Avg) - 1).",
+      "description": "Percentage difference of this combination's conversion rate compared to the company's average within this channel.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -358,7 +363,7 @@
     {
       "name": "roi_vs_company_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference between this combination's average ROI and the company's average ROI within this channel. ((Avg / Company Avg) - 1).",
+      "description": "Percentage difference of this combination's ROI compared to the company's average within this channel.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -367,7 +372,7 @@
     {
       "name": "acquisition_cost_vs_company_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference measuring how much lower this combination's acquisition cost is compared to the company average within this channel. ((Company Avg / Avg) - 1). Positive means lower cost (better).",
+      "description": "Percentage difference of this combination's acquisition cost compared to the company's average within this channel. Higher is better.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -376,7 +381,7 @@
     {
       "name": "ctr_vs_company_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference between this combination's average CTR and the company's average CTR within this channel. ((Avg / Company Avg) - 1).",
+      "description": "Percentage difference of this combination's CTR compared to the company's average within this channel.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -385,7 +390,7 @@
     {
       "name": "conversion_rate_vs_dimension_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference between this combination's average conversion rate and the dimension's average conversion rate within this channel. ((Avg / Dimension Avg) - 1).",
+      "description": "Percentage difference of this combination's conversion rate compared to the dimension's average within this channel.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -394,7 +399,7 @@
     {
       "name": "roi_vs_dimension_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference between this combination's average ROI and the dimension's average ROI within this channel. ((Avg / Dimension Avg) - 1).",
+      "description": "Percentage difference of this combination's ROI compared to the dimension's average within this channel.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -403,7 +408,7 @@
     {
       "name": "acquisition_cost_vs_dimension_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference measuring how much lower this combination's acquisition cost is compared to the dimension average within this channel. ((Dimension Avg / Avg) - 1). Positive means lower cost (better).",
+      "description": "Percentage difference of this combination's acquisition cost compared to the dimension's average within this channel. Higher is better.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -412,7 +417,7 @@
     {
       "name": "ctr_vs_dimension_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference between this combination's average CTR and the dimension's average CTR within this channel. ((Avg / Dimension Avg) - 1).",
+      "description": "Percentage difference of this combination's CTR compared to the dimension's average within this channel.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -421,7 +426,7 @@
     {
       "name": "conversion_rate_vs_global_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference between this combination's average conversion rate and the global average conversion rate. ((Avg / Global Avg) - 1).",
+      "description": "Percentage difference of this combination's conversion rate compared to the global average.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -430,7 +435,7 @@
     {
       "name": "roi_vs_global_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference between this combination's average ROI and the global average ROI. ((Avg / Global Avg) - 1).",
+      "description": "Percentage difference of this combination's ROI compared to the global average.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -439,7 +444,7 @@
     {
       "name": "acquisition_cost_vs_global_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference measuring how much lower this combination's acquisition cost is compared to the global average. ((Global Avg / Avg) - 1). Positive means lower cost (better).",
+      "description": "Percentage difference of this combination's acquisition cost compared to the global average. Higher is better.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -448,7 +453,7 @@
     {
       "name": "ctr_vs_global_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference between this combination's average CTR and the global average CTR. ((Avg / Global Avg) - 1).",
+      "description": "Percentage difference of this combination's CTR compared to the global average.",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
@@ -457,7 +462,7 @@
     {
       "name": "spend_pct_of_channel",
       "type": "DOUBLE",
-      "description": "The percentage of the total channel spend allocated to this specific combination (Total Spend / Channel Total Spend).",
+      "description": "The percentage of the channel's total spend allocated to this specific combination (Combo Spend / Channel Spend).",
       "tests": [
         "dbt_expectations.expect_column_values_to_be_between",
         "dbt_expectations.expect_column_values_to_be_of_type"
@@ -467,8 +472,9 @@
     {
       "name": "revenue_pct_of_channel",
       "type": "DOUBLE",
-      "description": "The percentage of the total channel revenue contributed by this specific combination (Total Revenue / Channel Total Revenue).",
+      "description": "The percentage of the channel's total revenue contributed by this specific combination (Combo Revenue / Channel Revenue).",
       "tests": [
+        "dbt_expectations.expect_column_values_to_be_between",
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
       "tags": []
@@ -476,9 +482,8 @@
     {
       "name": "composite_score",
       "type": "DOUBLE",
-      "description": "A weighted score reflecting overall performance relative to global averages. Weights: ROI (0.4), Conversion Rate (0.25), Acquisition Cost (0.25, inverted), CTR (0.1). Higher is better.",
+      "description": "A weighted score reflecting overall performance relative to global averages (Weights: ROI 40%, Conversion Rate 25%, Acquisition Cost 25%, CTR 10%). Higher is better.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_non_negative",
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
       "tags": []
@@ -486,19 +491,21 @@
     {
       "name": "performance_tier",
       "type": "VARCHAR",
-      "description": "Categorizes performance based on the composite score: 'high_performer' (>=1.2), 'low_performer' (<=0.8), 'average_performer' (between 0.8 and 1.2).",
+      "description": "Categorization based on composite score ('high_performer' >= 1.2, 'low_performer' <= 0.8, 'average_performer' otherwise).",
       "tests": [
         "not_null",
-        "accepted_values"
+        "accepted_values",
+        "dbt_expectations.expect_column_values_to_be_of_type"
       ],
       "tags": []
     },
     {
       "name": "is_top_performer",
       "type": "BOOLEAN",
-      "description": "Boolean flag indicating if this combination ranks in the top 10% based on composite score within its dimension type (goal or target_audience).",
+      "description": "Boolean flag indicating if this combination ranks in the top 10% based on composite score within its dimension type.",
       "tests": [
         "not_null",
+        "accepted_values",
         "dbt_expectations.expect_column_values_to_be_of_type"
       ],
       "tags": []

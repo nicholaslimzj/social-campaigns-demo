@@ -1,11 +1,11 @@
 {
   "name": "campaign_future_forecast",
-  "description": "Mart model that generates campaign performance forecasts for the next 3 months.\nIt utilizes historical monthly data from `stg_campaigns` to calculate trends,\nseasonal factors (if applicable), and projects key metrics like Conversion Rate,\nROI, Acquisition Cost, and CTR using SQL-based time series techniques.\nThe model also provides 95% confidence intervals for the forecasts based on\nhistorical volatility and includes both historical actuals and future projections.\nDesigned for use in performance forecasting dashboards and predictive analytics.\n",
+  "description": "Mart model that generates a 3-month performance forecast for marketing campaigns by company.\nIt combines historical monthly aggregated data from `stg_campaigns` with time series forecasting techniques (moving averages, growth rates, seasonality) calculated using SQL.\nThe model outputs both historical actuals and future predicted values for key metrics like Conversion Rate, ROI, Acquisition Cost, and CTR, along with confidence intervals.\nUsed for predictive analytics dashboards and campaign planning.\n",
   "columns": [
     {
       "name": "Company",
       "type": "VARCHAR",
-      "description": "The name of the company associated with the campaign data. Foreign key to stg_campaigns.Company.",
+      "description": "The name of the company associated with the campaign data.",
       "tests": [
         "not_null",
         "relationships"
@@ -15,10 +15,11 @@
     {
       "name": "month_id",
       "type": "DOUBLE",
-      "description": "Numeric representation of the year and month (YYYYMM), used for time series ordering. Unique identifier for a company-month combination.",
+      "description": "Numeric representation of the month and year (Format: YYYYMM). Used as the primary time dimension for historical data and forecasts.",
       "tests": [
         "not_null",
-        "dbt_expectations.expect_column_values_to_be_positive"
+        "dbt_utils.unique_combination_of_columns",
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
@@ -35,28 +36,28 @@
     {
       "name": "year",
       "type": "DOUBLE",
-      "description": "The calendar year (e.g., 2022).",
+      "description": "The calendar year.",
       "tests": [
         "not_null",
-        "dbt_expectations.expect_column_values_to_be_between"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "conversion_rate",
       "type": "DOUBLE",
-      "description": "Historical average conversion rate for the company in that specific month. Null for forecast periods.",
+      "description": "Historical average conversion rate for the company in that month. Null for forecast periods.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_non_negative"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "conversion_rate_forecast",
       "type": "DOUBLE",
-      "description": "Projected average conversion rate for the company in a future month. Null for historical periods.",
+      "description": "Forecasted average conversion rate for the company in that future month. Null for historical periods.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_non_negative"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
@@ -65,7 +66,7 @@
       "type": "DOUBLE",
       "description": "Lower bound of the 95% confidence interval for the conversion rate forecast. Null for historical periods.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_non_negative"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
@@ -73,24 +74,27 @@
       "name": "conversion_rate_upper_bound",
       "type": "DOUBLE",
       "description": "Upper bound of the 95% confidence interval for the conversion rate forecast. Null for historical periods.",
-      "tests": [],
+      "tests": [
+        "dbt_utils.accepted_range",
+        "dbt_utils.expression_is_true"
+      ],
       "tags": []
     },
     {
       "name": "roi",
       "type": "DOUBLE",
-      "description": "Historical average Return on Investment (ROI) for the company in that specific month. Null for forecast periods.",
+      "description": "Historical average Return on Investment (ROI) for the company in that month. Null for forecast periods.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_non_negative"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "roi_forecast",
       "type": "DOUBLE",
-      "description": "Projected average ROI for the company in a future month. Null for historical periods.",
+      "description": "Forecasted average ROI for the company in that future month. Null for historical periods.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_non_negative"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
@@ -99,7 +103,7 @@
       "type": "DOUBLE",
       "description": "Lower bound of the 95% confidence interval for the ROI forecast. Null for historical periods.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_non_negative"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
@@ -107,24 +111,27 @@
       "name": "roi_upper_bound",
       "type": "DOUBLE",
       "description": "Upper bound of the 95% confidence interval for the ROI forecast. Null for historical periods.",
-      "tests": [],
+      "tests": [
+        "dbt_utils.accepted_range",
+        "dbt_utils.expression_is_true"
+      ],
       "tags": []
     },
     {
       "name": "acquisition_cost",
       "type": "DOUBLE",
-      "description": "Historical average acquisition cost for the company in that specific month. Null for forecast periods.",
+      "description": "Historical average acquisition cost for the company in that month. Null for forecast periods.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_non_negative"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "acquisition_cost_forecast",
       "type": "DOUBLE",
-      "description": "Projected average acquisition cost for the company in a future month. Null for historical periods.",
+      "description": "Forecasted average acquisition cost for the company in that future month. Null for historical periods.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_non_negative"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
@@ -133,7 +140,7 @@
       "type": "DOUBLE",
       "description": "Lower bound of the 95% confidence interval for the acquisition cost forecast (lower cost is better). Null for historical periods.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_non_negative"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
@@ -141,24 +148,27 @@
       "name": "acquisition_cost_upper_bound",
       "type": "DOUBLE",
       "description": "Upper bound of the 95% confidence interval for the acquisition cost forecast. Null for historical periods.",
-      "tests": [],
+      "tests": [
+        "dbt_utils.accepted_range",
+        "dbt_utils.expression_is_true"
+      ],
       "tags": []
     },
     {
       "name": "ctr",
       "type": "FLOAT",
-      "description": "Historical average Click-Through Rate (CTR) for the company in that specific month (Clicks / Impressions). Null for forecast periods.",
+      "description": "Historical average Click-Through Rate (CTR) for the company in that month. Null for forecast periods.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_non_negative"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "ctr_forecast",
       "type": "DOUBLE",
-      "description": "Projected average CTR for the company in a future month. Null for historical periods.",
+      "description": "Forecasted average CTR for the company in that future month. Null for historical periods.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_non_negative"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
@@ -167,7 +177,7 @@
       "type": "DOUBLE",
       "description": "Lower bound of the 95% confidence interval for the CTR forecast. Null for historical periods.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_non_negative"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
@@ -175,13 +185,16 @@
       "name": "ctr_upper_bound",
       "type": "DOUBLE",
       "description": "Upper bound of the 95% confidence interval for the CTR forecast. Null for historical periods.",
-      "tests": [],
+      "tests": [
+        "dbt_utils.accepted_range",
+        "dbt_utils.expression_is_true"
+      ],
       "tags": []
     },
     {
       "name": "is_forecast",
       "type": "BOOLEAN",
-      "description": "Boolean flag indicating whether the row represents forecasted data (TRUE) or historical actual data (FALSE).",
+      "description": "Boolean flag indicating whether the row represents historical data (false) or forecasted data (true).",
       "tests": [
         "not_null",
         "accepted_values"
@@ -191,7 +204,7 @@
     {
       "name": "month_name",
       "type": "VARCHAR",
-      "description": "The full name of the calendar month (e.g., 'January').",
+      "description": "The full name of the calendar month (e.g., 'January', 'February').",
       "tests": [
         "not_null",
         "accepted_values"
@@ -201,18 +214,18 @@
     {
       "name": "conversion_rate_uncertainty",
       "type": "DOUBLE",
-      "description": "A measure of the relative uncertainty in the conversion rate forecast, calculated as the width of the confidence interval relative to the forecast value. Null for historical periods.",
+      "description": "A relative measure of the forecast uncertainty for conversion rate, calculated as the width of the confidence interval relative to the forecast value. Null for historical periods.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_non_negative"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "roi_uncertainty",
       "type": "DOUBLE",
-      "description": "A measure of the relative uncertainty in the ROI forecast, calculated as the width of the confidence interval relative to the forecast value. Null for historical periods.",
+      "description": "A relative measure of the forecast uncertainty for ROI, calculated as the width of the confidence interval relative to the forecast value. Null for historical periods.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_non_negative"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     }

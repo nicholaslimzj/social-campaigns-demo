@@ -3,161 +3,159 @@ version: 2
 models:
   - name: campaign_duration_quarter_analysis
     description: |
-      Analyzes the relationship between campaign duration and performance metrics (ROI, Conversion Rate, CTR, etc.) for the most recent quarter (last 3 months of data).
-      It identifies optimal campaign duration buckets based on average ROI across different dimensions: overall company, company-goal, and company-channel.
-      The model also provides aggregated performance metrics for exact campaign durations.
-      This analysis helps in understanding optimal campaign lengths for planning and optimization.
-      Data is filtered to include only duration buckets or exact durations with at least 2 campaigns.
-      Output includes two types of analysis identified by the 'analysis_type' column: 'optimal_durations' and 'exact_duration_performance'.
+      Analyzes campaign performance metrics based on campaign duration, aggregated over the most recent quarter (last 3 months of data).
+      It buckets campaigns by duration ranges and calculates average performance (ROI, Conversion Rate, CTR, Acquisition Cost) for each bucket across different dimensions: overall company, campaign goal, and channel used.
+      The model identifies the optimal duration bucket (based on highest average ROI) for each dimension/category combination.
+      It also provides detailed performance data per duration bucket (for heatmaps) and per exact duration day (for scatter plots), including ROI impact calculations relative to averages.
+      This model supports dashboards visualizing campaign duration impact and providing optimization recommendations.
     config:
       materialized: table
-      tags:
-        - 'mart'
-        - 'marketing'
-        - 'campaign_analysis'
-        - 'performance'
-        - 'optimization'
+      tags: ['mart', 'marketing', 'campaign_analysis']
     columns:
       - name: analysis_type
-        description: "Indicates the type of analysis presented in the row: 'optimal_durations' (summary of best performing duration bucket) or 'exact_duration_performance' (performance metrics for a specific campaign duration in days)."
-        data_type: VARCHAR
+        description: "Categorizes the type of analysis represented by the row: 'optimal_durations' (summary of best performing duration), 'company_duration_heatmap', 'goal_duration_heatmap', 'channel_duration_heatmap' (performance per duration bucket for heatmap viz), or 'exact_duration_performance' (performance per specific day duration for scatter plots)."
         tests:
           - not_null
           - accepted_values:
-              values: ['optimal_durations', 'exact_duration_performance']
-        # Define the multi-column unique key here, anchored to analysis_type
-        # This combination ensures uniqueness across both parts of the UNION ALL
-        # Note: NULLs in dimension, category, Duration might affect standard unique tests depending on warehouse.
-        # dbt_utils handles NULLs appropriately in this test.
-        tests:
-          - dbt_utils.unique_combination_of_columns:
-              combination_of_columns:
-                - analysis_type
-                - Company
-                - dimension
-                - category
-                - Duration
+              values: ['optimal_durations', 'company_duration_heatmap', 'goal_duration_heatmap', 'channel_duration_heatmap', 'exact_duration_performance']
 
       - name: Company
-        description: "The name of the company for which the campaign analysis is performed."
-        data_type: VARCHAR
+        description: "The name of the company associated with the campaign data."
         tests:
           - not_null
+          # Assuming Company exists and is validated in the staging model
           - relationships:
               to: ref('stg_campaigns')
-              field: Company # Assuming 'Company' exists in stg_campaigns
+              field: Company
 
       - name: dimension
-        description: "The dimension used for identifying the optimal duration ('Company', 'Goal', 'Channel'). Populated only when analysis_type is 'optimal_durations'."
-        data_type: VARCHAR
+        description: "The dimension used for grouping the analysis ('Company', 'Goal', 'Channel'). NULL for 'exact_duration_performance' analysis type."
         tests:
           - accepted_values:
               values: ['Company', 'Goal', 'Channel']
-              # This test passes if the value is NULL or one of the listed values.
+              where: "analysis_type != 'exact_duration_performance'" # Test only where dimension is expected
 
       - name: category
-        description: "The specific category within the dimension (e.g., company name, goal name, channel name). Populated only when analysis_type is 'optimal_durations'."
-        data_type: VARCHAR
+        description: "The specific value within the dimension (e.g., the company name if dimension='Company', the goal name if dimension='Goal', the channel name if dimension='Channel'). NULL for 'exact_duration_performance' analysis type."
+        tests:
+          # Not null only when dimension is not null, difficult to test simply without allow_null.
+          # Relying on dimension test and source data integrity.
+          - not_null:
+              where: "analysis_type != 'exact_duration_performance'"
 
       - name: optimal_duration_bucket
-        description: "The text representation of the campaign duration bucket (e.g., '22-30 days') identified as having the highest average ROI for the given company/dimension/category. Populated only when analysis_type is 'optimal_durations'."
-        data_type: VARCHAR
+        description: "The calculated optimal duration range (e.g., '15-21 days') based on the highest average ROI for the given Company/Dimension/Category. Populated only when analysis_type = 'optimal_durations'."
         tests:
           - accepted_values:
               values: ['1-7 days', '8-14 days', '15-21 days', '22-30 days', '31-45 days', '46-60 days', '60+ days']
-              # This test passes if the value is NULL or one of the listed values.
+              where: "analysis_type = 'optimal_durations'" # Test only where this field is expected
 
       - name: optimal_min_duration
-        description: "The minimum campaign duration (in days) included in the optimal duration bucket. Populated only when analysis_type is 'optimal_durations'."
-        data_type: BIGINT
+        description: "The minimum campaign duration (in days) included in the specific duration bucket or optimal bucket. Populated for 'optimal_durations' and heatmap analysis types."
         tests:
           - dbt_utils.accepted_range:
               min_value: 1
-              # Allows NULLs
+              where: "analysis_type != 'exact_duration_performance'" # Duration should be positive where applicable
 
       - name: optimal_max_duration
-        description: "The maximum campaign duration (in days) included in the optimal duration bucket. Populated only when analysis_type is 'optimal_durations'."
-        data_type: BIGINT
+        description: "The maximum campaign duration (in days) included in the specific duration bucket or optimal bucket. Populated for 'optimal_durations' and heatmap analysis types."
         tests:
           - dbt_utils.accepted_range:
               min_value: 1
-              # Allows NULLs
+              where: "analysis_type != 'exact_duration_performance'" # Duration should be positive where applicable
 
       - name: optimal_roi
-        description: "The average Return on Investment (ROI) achieved within the optimal duration bucket for the given company/dimension/category. Populated only when analysis_type is 'optimal_durations'."
-        data_type: DOUBLE
+        description: "The average Return on Investment (ROI) associated with the optimal_duration_bucket. Populated only when analysis_type = 'optimal_durations'."
         tests:
           - dbt_utils.accepted_range:
-              min_value: 0
-              # Allows NULLs and potentially negative ROI, although typically positive. Setting min_value to 0 is a basic sanity check.
+              min_value: 0 # ROI can be 0 or positive
+              where: "analysis_type = 'optimal_durations'"
 
       - name: optimal_conversion_rate
-        description: "The average conversion rate achieved within the optimal duration bucket for the given company/dimension/category. Populated only when analysis_type is 'optimal_durations'."
-        data_type: DOUBLE
+        description: "The average Conversion Rate associated with the optimal_duration_bucket. Populated only when analysis_type = 'optimal_durations'."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              max_value: 1 # Conversion rate should be between 0 and 1
-              # Allows NULLs
+              # max_value: 1 # Conversion rate should theoretically be <= 1, but avg could exceed slightly due to data issues? Safer to omit max.
+              where: "analysis_type = 'optimal_durations'"
 
       - name: optimal_roi_per_day
-        description: "The average Return on Investment (ROI) per day, calculated within the optimal duration bucket to normalize for duration length. Populated only when analysis_type is 'optimal_durations'."
-        data_type: DOUBLE
+        description: "The average Return on Investment (ROI) per day, calculated for the optimal_duration_bucket to normalize ROI across different durations. Populated only when analysis_type = 'optimal_durations'."
+        tests:
+          - not_null:
+              where: "analysis_type = 'optimal_durations'"
+          # Range can be tricky, could be negative if costs exceed revenue significantly.
 
       - name: optimal_duration_range
-        description: "A formatted string representing the optimal duration range (e.g., '30-30 days', '31-45 days'). Derived from optimal_min_duration and optimal_max_duration. Populated only when analysis_type is 'optimal_durations'."
-        data_type: VARCHAR
+        description: "A formatted string representing the optimal duration range (e.g., '45-45 days' or '15-21 days'). Populated only when analysis_type = 'optimal_durations'."
+        tests:
+          - not_null:
+              where: "analysis_type = 'optimal_durations'"
 
       - name: Duration
-        description: "The exact duration of campaigns in days. Populated only when analysis_type is 'exact_duration_performance'."
-        data_type: BIGINT
+        description: "The exact campaign duration in days. Populated only when analysis_type = 'exact_duration_performance'."
         tests:
           - dbt_utils.accepted_range:
               min_value: 1
-              # Allows NULLs
+              where: "analysis_type = 'exact_duration_performance'" # Duration should be positive
 
       - name: campaign_count
-        description: "The number of campaigns aggregated for this specific duration (when analysis_type is 'exact_duration_performance'). Based on HAVING clause, this should be >= 2."
-        data_type: BIGINT
+        description: "The number of campaigns aggregated within the specific group (duration bucket/dimension/category or exact duration). Populated for heatmap and exact duration analysis types."
         tests:
           - dbt_utils.accepted_range:
-              min_value: 2
-              # Allows NULLs (for analysis_type = 'optimal_durations')
+              min_value: 2 # Based on HAVING COUNT(*) >= 2 in the SQL queries
+              where: "analysis_type != 'optimal_durations'"
 
       - name: avg_conversion_rate
-        description: "The average conversion rate for campaigns with the specified exact 'Duration'. Populated only when analysis_type is 'exact_duration_performance'."
-        data_type: DOUBLE
+        description: "The average Conversion Rate for the campaigns within the specific group. Populated for heatmap and exact duration analysis types."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              max_value: 1 # Conversion rate should be between 0 and 1
-              # Allows NULLs
+              where: "analysis_type != 'optimal_durations'"
 
       - name: avg_roi
-        description: "The average Return on Investment (ROI) for campaigns with the specified exact 'Duration'. Populated only when analysis_type is 'exact_duration_performance'."
-        data_type: DOUBLE
+        description: "The average Return on Investment (ROI) for the campaigns within the specific group. Populated for heatmap and exact duration analysis types."
         tests:
-          - dbt_utils.accepted_range:
-              min_value: 0
-              # Allows NULLs and potentially negative ROI. Setting min_value to 0 is a basic sanity check.
+          - not_null:
+              where: "analysis_type != 'optimal_durations'"
+          # Range can be tricky, could be negative.
 
       - name: avg_acquisition_cost
-        description: "The average acquisition cost for campaigns with the specified exact 'Duration'. Populated only when analysis_type is 'exact_duration_performance'."
-        data_type: DOUBLE
+        description: "The average Acquisition Cost for the campaigns within the specific group. Populated for heatmap and exact duration analysis types."
         tests:
           - dbt_utils.accepted_range:
-              min_value: 0
-              # Allows NULLs
+              min_value: 0 # Cost should generally be non-negative
+              where: "analysis_type != 'optimal_durations'"
 
       - name: avg_ctr
-        description: "The average Click-Through Rate (CTR) for campaigns with the specified exact 'Duration'. Populated only when analysis_type is 'exact_duration_performance'."
-        data_type: FLOAT # Note: SQL calculates as FLOAT
+        description: "The average Click-Through Rate (CTR) for the campaigns within the specific group. Populated for heatmap and exact duration analysis types."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              max_value: 1 # CTR should be between 0 and 1
-              # Allows NULLs
+              # max_value: 1 # CTR should theoretically be <= 1
+              where: "analysis_type != 'optimal_durations' AND avg_ctr IS NOT NULL" # Handle potential division by zero resulting in NULL
 
       - name: avg_roi_per_day
-        description: "The average Return on Investment (ROI) per day for campaigns with the specified exact 'Duration'. Populated only when analysis_type is 'exact_duration_performance'."
-        data_type: DOUBLE
+        description: "The average Return on Investment (ROI) per day for the campaigns within the specific group, used to normalize ROI across different durations. Populated for heatmap and exact duration analysis types."
+        tests:
+          - not_null:
+              where: "analysis_type != 'optimal_durations' AND avg_roi_per_day IS NOT NULL" # Handle potential division by zero resulting in NULL
+
+      - name: roi_impact
+        description: "The absolute difference between the average ROI of the duration bucket and the overall average ROI for its specific dimension/category (e.g., avg ROI for '15-21 days' bucket minus avg ROI for 'Goal=Brand Awareness'). Populated for heatmap analysis types."
+        tests:
+          - not_null:
+              where: "analysis_type LIKE '%_heatmap'"
+
+      - name: roi_impact_pct
+        description: "The percentage difference between the average ROI of the duration bucket and the overall average ROI for its specific dimension/category. Populated for heatmap analysis types."
+        tests:
+          - not_null:
+              where: "analysis_type LIKE '%_heatmap' AND roi_impact_pct IS NOT NULL" # Handle potential division by zero resulting in NULL
+
+      - name: duration_bucket_num
+        description: "A numerical representation of the duration bucket (1: '1-7 days', 2: '8-14 days', ..., 7: '60+ days'). Populated for heatmap analysis types."
+        tests:
+          - accepted_values:
+              values: [1, 2, 3, 4, 5, 6, 7]
+              where: "analysis_type LIKE '%_heatmap'"

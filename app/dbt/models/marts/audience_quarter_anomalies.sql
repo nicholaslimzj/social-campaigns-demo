@@ -52,8 +52,8 @@ company_audience_quarter_metrics AS (
         SUM(Clicks) as total_clicks,
         SUM(Impressions) as total_impressions,
         CAST(SUM(Clicks) AS FLOAT) / NULLIF(SUM(Impressions), 0) as quarterly_ctr,
-        SUM(Clicks * Acquisition_Cost) as total_spend,
-        SUM(Clicks * Acquisition_Cost * ROI) as total_revenue,
+        SUM(Acquisition_Cost) as total_spend,
+        SUM(Acquisition_Cost * (1 + ROI)) as total_revenue,
         COUNT(DISTINCT Campaign_ID) as campaign_count
     FROM {{ ref('stg_campaigns') }}
     GROUP BY 

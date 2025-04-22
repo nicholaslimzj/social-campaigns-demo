@@ -57,8 +57,8 @@ channel_performance AS (
         1 AS company_count, -- Since we're now grouping by company, this is always 1
         SUM(Clicks) AS total_clicks,
         SUM(Impressions) AS total_impressions,
-        SUM(Clicks * Acquisition_Cost) AS total_spend,
-        SUM(Clicks * Acquisition_Cost * ROI) AS total_revenue,
+        SUM(Acquisition_Cost) AS total_spend,
+        SUM(Acquisition_Cost * (1 + ROI)) AS total_revenue,
         AVG(ROI) AS avg_roi,
         AVG(Conversion_Rate) AS avg_conversion_rate,
         AVG(Acquisition_Cost) AS avg_acquisition_cost,

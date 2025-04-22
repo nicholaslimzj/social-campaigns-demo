@@ -1,30 +1,32 @@
 {
   "name": "audience_quarter_performance_matrix",
-  "description": "Analyzes audience performance metrics for the current quarter (last 3 months of available data). Aggregates campaign data by Company, Target Audience, and a specific dimension (Location, Language, or Campaign Goal). Calculates key performance indicators (KPIs) like Conversion Rate, ROI, Acquisition Cost, and CTR for each combination. Provides context by comparing combination performance against company, audience, dimension, and global averages. Includes normalized metrics (scaled 0-1), a weighted composite score for ranking, and flags top-performing combinations (top 10% by composite score within each dimension type). Designed for use in performance dashboards and identifying high-potential audience segments.\n",
+  "description": "Analyzes audience performance metrics over the current quarter (last 3 months of data).\nCalculates key performance indicators (KPIs) like conversion rate, ROI, acquisition cost, and CTR\nfor combinations of Company, Target Audience, and a tertiary dimension (Location, Language, or Campaign Goal).\nProvides comparative metrics against company, audience, dimension, and global averages.\nIncludes normalized metrics, a weighted composite score for ranking, and a flag for top performers.\nDesigned for use in performance matrix heatmaps and comparative visualizations.\n",
   "columns": [
     {
       "name": "Company",
       "type": "VARCHAR",
-      "description": "The primary dimension: Name of the company running the campaigns.",
+      "description": "Name of the company running the campaigns. Primary dimension.",
       "tests": [
         "not_null",
-        "dbt_utils.unique_combination_of_columns"
+        "dbt_utils.unique_combination_of_columns",
+        "relationships"
       ],
       "tags": []
     },
     {
       "name": "Target_Audience",
       "type": "VARCHAR",
-      "description": "The secondary dimension: The specific audience segment targeted by the campaigns for the company.",
+      "description": "Specific audience segment targeted by the campaigns within the company. Secondary dimension.",
       "tests": [
-        "not_null"
+        "not_null",
+        "relationships"
       ],
       "tags": []
     },
     {
       "name": "dimension_value",
       "type": "VARCHAR",
-      "description": "The specific value of the tertiary dimension (e.g., 'USA', 'English', 'Brand Awareness').",
+      "description": "The specific value of the dimension being analyzed (e.g., a specific location, language, or campaign goal). Tertiary dimension value.",
       "tests": [
         "not_null"
       ],
@@ -33,7 +35,7 @@
     {
       "name": "dimension_type",
       "type": "VARCHAR",
-      "description": "The type of the tertiary dimension ('location', 'language', or 'goal').",
+      "description": "Indicates the type of dimension represented by `dimension_value` ('location', 'language', 'goal'). Tertiary dimension type.",
       "tests": [
         "not_null",
         "accepted_values"
@@ -43,320 +45,347 @@
     {
       "name": "campaign_count",
       "type": "BIGINT",
-      "description": "The number of distinct campaigns contributing to this specific combination's metrics within the quarter.",
+      "description": "Number of campaigns contributing to this specific combination in the current quarter.",
       "tests": [
         "not_null",
-        "dbt_expectations.expect_column_values_to_be_non_negative"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "avg_conversion_rate",
       "type": "DOUBLE",
-      "description": "The average conversion rate for this Company-Audience-Dimension combination over the quarter.",
-      "tests": [],
+      "description": "Average conversion rate for this combination in the current quarter.",
+      "tests": [
+        "dbt_utils.accepted_range"
+      ],
       "tags": []
     },
     {
       "name": "avg_roi",
       "type": "DOUBLE",
-      "description": "The average Return on Investment (ROI) for this Company-Audience-Dimension combination over the quarter.",
+      "description": "Average Return on Investment (ROI) for this combination in the current quarter.",
       "tests": [],
       "tags": []
     },
     {
       "name": "avg_acquisition_cost",
       "type": "DOUBLE",
-      "description": "The average cost to acquire a customer/conversion for this Company-Audience-Dimension combination over the quarter.",
+      "description": "Average cost to acquire a customer/lead for this combination in the current quarter.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_non_negative"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "avg_ctr",
       "type": "FLOAT",
-      "description": "The average Click-Through Rate (Clicks / Impressions) for this Company-Audience-Dimension combination over the quarter.",
+      "description": "Average Click-Through Rate (CTR) for this combination in the current quarter.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_non_negative"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "company_avg_conversion_rate",
       "type": "DOUBLE",
-      "description": "The average conversion rate across all audiences and dimensions for this Company over the quarter.",
-      "tests": [],
+      "description": "Average conversion rate across all audiences and dimensions for this company in the current quarter.",
+      "tests": [
+        "dbt_utils.accepted_range"
+      ],
       "tags": []
     },
     {
       "name": "company_avg_roi",
       "type": "DOUBLE",
-      "description": "The average ROI across all audiences and dimensions for this Company over the quarter.",
+      "description": "Average ROI across all audiences and dimensions for this company in the current quarter.",
       "tests": [],
       "tags": []
     },
     {
       "name": "company_avg_acquisition_cost",
       "type": "DOUBLE",
-      "description": "The average acquisition cost across all audiences and dimensions for this Company over the quarter.",
-      "tests": [],
+      "description": "Average acquisition cost across all audiences and dimensions for this company in the current quarter.",
+      "tests": [
+        "dbt_utils.accepted_range"
+      ],
       "tags": []
     },
     {
       "name": "company_avg_ctr",
       "type": "DOUBLE",
-      "description": "The average CTR across all audiences and dimensions for this Company over the quarter.",
-      "tests": [],
+      "description": "Average CTR across all audiences and dimensions for this company in the current quarter.",
+      "tests": [
+        "dbt_utils.accepted_range"
+      ],
       "tags": []
     },
     {
       "name": "audience_avg_conversion_rate",
       "type": "DOUBLE",
-      "description": "The average conversion rate for this specific Target Audience across all dimensions within this Company over the quarter.",
-      "tests": [],
+      "description": "Average conversion rate for this specific Company-Target_Audience pair across all dimensions in the current quarter.",
+      "tests": [
+        "dbt_utils.accepted_range"
+      ],
       "tags": []
     },
     {
       "name": "audience_avg_roi",
       "type": "DOUBLE",
-      "description": "The average ROI for this specific Target Audience across all dimensions within this Company over the quarter.",
+      "description": "Average ROI for this specific Company-Target_Audience pair across all dimensions in the current quarter.",
       "tests": [],
       "tags": []
     },
     {
       "name": "audience_avg_acquisition_cost",
       "type": "DOUBLE",
-      "description": "The average acquisition cost for this specific Target Audience across all dimensions within this Company over the quarter.",
-      "tests": [],
+      "description": "Average acquisition cost for this specific Company-Target_Audience pair across all dimensions in the current quarter.",
+      "tests": [
+        "dbt_utils.accepted_range"
+      ],
       "tags": []
     },
     {
       "name": "audience_avg_ctr",
       "type": "DOUBLE",
-      "description": "The average CTR for this specific Target Audience across all dimensions within this Company over the quarter.",
-      "tests": [],
+      "description": "Average CTR for this specific Company-Target_Audience pair across all dimensions in the current quarter.",
+      "tests": [
+        "dbt_utils.accepted_range"
+      ],
       "tags": []
     },
     {
       "name": "dimension_avg_conversion_rate",
       "type": "DOUBLE",
-      "description": "The average conversion rate for this specific dimension value (e.g., 'USA') across all target audiences within this Company over the quarter.",
-      "tests": [],
+      "description": "Average conversion rate for this specific Company-Dimension combination across all audiences in the current quarter.",
+      "tests": [
+        "dbt_utils.accepted_range"
+      ],
       "tags": []
     },
     {
       "name": "dimension_avg_roi",
       "type": "DOUBLE",
-      "description": "The average ROI for this specific dimension value across all target audiences within this Company over the quarter.",
+      "description": "Average ROI for this specific Company-Dimension combination across all audiences in the current quarter.",
       "tests": [],
       "tags": []
     },
     {
       "name": "dimension_avg_acquisition_cost",
       "type": "DOUBLE",
-      "description": "The average acquisition cost for this specific dimension value across all target audiences within this Company over the quarter.",
-      "tests": [],
+      "description": "Average acquisition cost for this specific Company-Dimension combination across all audiences in the current quarter.",
+      "tests": [
+        "dbt_utils.accepted_range"
+      ],
       "tags": []
     },
     {
       "name": "dimension_avg_ctr",
       "type": "DOUBLE",
-      "description": "The average CTR for this specific dimension value across all target audiences within this Company over the quarter.",
-      "tests": [],
+      "description": "Average CTR for this specific Company-Dimension combination across all audiences in the current quarter.",
+      "tests": [
+        "dbt_utils.accepted_range"
+      ],
       "tags": []
     },
     {
       "name": "global_avg_conversion_rate",
       "type": "DOUBLE",
-      "description": "The global average conversion rate across all companies, audiences, and dimensions over the quarter.",
-      "tests": [],
+      "description": "Global average conversion rate across all combinations in the current quarter.",
+      "tests": [
+        "dbt_utils.accepted_range"
+      ],
       "tags": []
     },
     {
       "name": "global_avg_roi",
       "type": "DOUBLE",
-      "description": "The global average ROI across all companies, audiences, and dimensions over the quarter.",
+      "description": "Global average ROI across all combinations in the current quarter.",
       "tests": [],
       "tags": []
     },
     {
       "name": "global_avg_acquisition_cost",
       "type": "DOUBLE",
-      "description": "The global average acquisition cost across all companies, audiences, and dimensions over the quarter.",
-      "tests": [],
+      "description": "Global average acquisition cost across all combinations in the current quarter.",
+      "tests": [
+        "dbt_utils.accepted_range"
+      ],
       "tags": []
     },
     {
       "name": "global_avg_ctr",
       "type": "DOUBLE",
-      "description": "The global average CTR across all companies, audiences, and dimensions over the quarter.",
-      "tests": [],
+      "description": "Global average CTR across all combinations in the current quarter.",
+      "tests": [
+        "dbt_utils.accepted_range"
+      ],
       "tags": []
     },
     {
       "name": "conversion_rate_vs_company_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference of this combination's conversion rate compared to the company's average conversion rate. (Metric / Company Avg) - 1.",
+      "description": "Percentage difference between the combination's conversion rate and the company's average conversion rate. ((avg_conv_rate / company_avg_conv_rate) - 1)",
       "tests": [],
       "tags": []
     },
     {
       "name": "roi_vs_company_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference of this combination's ROI compared to the company's average ROI. (Metric / Company Avg) - 1.",
+      "description": "Percentage difference between the combination's ROI and the company's average ROI. ((avg_roi / company_avg_roi) - 1)",
       "tests": [],
       "tags": []
     },
     {
       "name": "acquisition_cost_vs_company_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference of this combination's acquisition cost compared to the company's average acquisition cost (inverted for performance: (Company Avg / Metric) - 1).",
+      "description": "Percentage difference showing how much lower the combination's acquisition cost is compared to the company average (inverted for positive = better). ((company_avg_acq_cost / avg_acq_cost) - 1)",
       "tests": [],
       "tags": []
     },
     {
       "name": "ctr_vs_company_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference of this combination's CTR compared to the company's average CTR. (Metric / Company Avg) - 1.",
+      "description": "Percentage difference between the combination's CTR and the company's average CTR. ((avg_ctr / company_avg_ctr) - 1)",
       "tests": [],
       "tags": []
     },
     {
       "name": "conversion_rate_vs_audience_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference of this combination's conversion rate compared to the average for this specific audience within the company. (Metric / Audience Avg) - 1.",
+      "description": "Percentage difference between the combination's conversion rate and the average for its specific Company-Audience pair.",
       "tests": [],
       "tags": []
     },
     {
       "name": "roi_vs_audience_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference of this combination's ROI compared to the average for this specific audience within the company. (Metric / Audience Avg) - 1.",
+      "description": "Percentage difference between the combination's ROI and the average for its specific Company-Audience pair.",
       "tests": [],
       "tags": []
     },
     {
       "name": "acquisition_cost_vs_audience_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference of this combination's acquisition cost compared to the average for this specific audience within the company (inverted: (Audience Avg / Metric) - 1).",
+      "description": "Percentage difference showing how much lower the combination's acquisition cost is compared to the average for its specific Company-Audience pair (inverted).",
       "tests": [],
       "tags": []
     },
     {
       "name": "ctr_vs_audience_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference of this combination's CTR compared to the average for this specific audience within the company. (Metric / Audience Avg) - 1.",
+      "description": "Percentage difference between the combination's CTR and the average for its specific Company-Audience pair.",
       "tests": [],
       "tags": []
     },
     {
       "name": "conversion_rate_vs_dimension_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference of this combination's conversion rate compared to the average for this specific dimension value within the company. (Metric / Dimension Avg) - 1.",
+      "description": "Percentage difference between the combination's conversion rate and the average for its specific Company-Dimension pair.",
       "tests": [],
       "tags": []
     },
     {
       "name": "roi_vs_dimension_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference of this combination's ROI compared to the average for this specific dimension value within the company. (Metric / Dimension Avg) - 1.",
+      "description": "Percentage difference between the combination's ROI and the average for its specific Company-Dimension pair.",
       "tests": [],
       "tags": []
     },
     {
       "name": "acquisition_cost_vs_dimension_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference of this combination's acquisition cost compared to the average for this specific dimension value within the company (inverted: (Dimension Avg / Metric) - 1).",
+      "description": "Percentage difference showing how much lower the combination's acquisition cost is compared to the average for its specific Company-Dimension pair (inverted).",
       "tests": [],
       "tags": []
     },
     {
       "name": "ctr_vs_dimension_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference of this combination's CTR compared to the average for this specific dimension value within the company. (Metric / Dimension Avg) - 1.",
+      "description": "Percentage difference between the combination's CTR and the average for its specific Company-Dimension pair.",
       "tests": [],
       "tags": []
     },
     {
       "name": "conversion_rate_vs_global_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference of this combination's conversion rate compared to the global average conversion rate. (Metric / Global Avg) - 1.",
+      "description": "Percentage difference between the combination's conversion rate and the global average conversion rate.",
       "tests": [],
       "tags": []
     },
     {
       "name": "roi_vs_global_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference of this combination's ROI compared to the global average ROI. (Metric / Global Avg) - 1.",
+      "description": "Percentage difference between the combination's ROI and the global average ROI.",
       "tests": [],
       "tags": []
     },
     {
       "name": "acquisition_cost_vs_global_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference of this combination's acquisition cost compared to the global average acquisition cost (inverted: (Global Avg / Metric) - 1).",
+      "description": "Percentage difference showing how much lower the combination's acquisition cost is compared to the global average (inverted).",
       "tests": [],
       "tags": []
     },
     {
       "name": "ctr_vs_global_avg",
       "type": "DOUBLE",
-      "description": "Percentage difference of this combination's CTR compared to the global average CTR. (Metric / Global Avg) - 1.",
+      "description": "Percentage difference between the combination's CTR and the global average CTR.",
       "tests": [],
       "tags": []
     },
     {
       "name": "normalized_conversion_rate",
       "type": "DOUBLE",
-      "description": "Conversion rate normalized to a 0-1 scale across all combinations in the dataset for the quarter. Higher is better.",
+      "description": "Combination's average conversion rate normalized to a 0-1 scale across all combinations in the dataset.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_between"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "normalized_roi",
       "type": "DOUBLE",
-      "description": "ROI normalized to a 0-1 scale across all combinations in the dataset for the quarter. Higher is better.",
+      "description": "Combination's average ROI normalized to a 0-1 scale across all combinations in the dataset.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_between"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "normalized_acquisition_cost",
       "type": "DOUBLE",
-      "description": "Acquisition cost normalized to a 0-1 scale across all combinations (inverted, so 1 is best/lowest cost) for the quarter.",
+      "description": "Combination's average acquisition cost normalized to a 0-1 scale (inverted, so 1 is best/lowest cost) across all combinations.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_between"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "normalized_ctr",
       "type": "FLOAT",
-      "description": "CTR normalized to a 0-1 scale across all combinations in the dataset for the quarter. Higher is better.",
+      "description": "Combination's average CTR normalized to a 0-1 scale across all combinations in the dataset.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_between"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "composite_score",
       "type": "DOUBLE",
-      "description": "A weighted score (0-1) combining normalized ROI (40%), Conversion Rate (30%), Acquisition Cost (20%, inverted), and CTR (10%). Used for ranking combinations. Null if campaign_count is 0.",
+      "description": "Weighted score (0-1) combining normalized metrics to rank overall performance. Weights: ROI(40%), ConvRate(30%), AcqCost(20%), CTR(10%). Higher is better.",
       "tests": [
-        "dbt_expectations.expect_column_values_to_be_between"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "is_top_performer",
       "type": "BOOLEAN",
-      "description": "Boolean flag indicating if this combination ranks in the top 10% based on the composite_score within its dimension_type for the quarter.",
+      "description": "Boolean flag indicating if this combination ranks in the top 10% based on the composite score within its dimension type (location, language, or goal).",
       "tests": [
-        "not_null"
+        "not_null",
+        "accepted_values"
       ],
       "tags": []
     }

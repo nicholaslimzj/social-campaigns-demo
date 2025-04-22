@@ -55,8 +55,8 @@ audience_clusters AS (
         AVG(ROI) AS avg_roi,
         AVG(Acquisition_Cost) AS avg_acquisition_cost,
         CAST(SUM(Clicks) AS FLOAT) / NULLIF(SUM(Impressions), 0) AS avg_ctr,
-        SUM(Clicks * Acquisition_Cost) AS total_spend,
-        SUM(Clicks * Acquisition_Cost * ROI) AS total_revenue
+        SUM(Acquisition_Cost) AS total_spend,
+        SUM(Acquisition_Cost * (1 + ROI)) AS total_revenue
     FROM current_quarter_data
     GROUP BY 
         Company,

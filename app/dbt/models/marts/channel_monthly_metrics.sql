@@ -38,8 +38,8 @@ WITH monthly_data AS (
         SUM(Clicks) as total_clicks,
         SUM(Impressions) as total_impressions,
         CAST(SUM(Clicks) AS FLOAT) / NULLIF(SUM(Impressions), 0) as monthly_ctr,
-        SUM(Clicks * Acquisition_Cost) as total_spend,
-        SUM(Clicks * Acquisition_Cost * ROI) as total_revenue,
+        SUM(Acquisition_Cost) as total_spend,
+        SUM(Acquisition_Cost * (1 + ROI)) as total_revenue,
         -- Calculate company-channel-specific month-over-month changes
         LAG(AVG(ROI)) OVER (PARTITION BY Company, Channel_Used ORDER BY EXTRACT(MONTH FROM CAST(Date AS DATE))) as prev_month_roi,
         LAG(AVG(Conversion_Rate)) OVER (PARTITION BY Company, Channel_Used ORDER BY EXTRACT(MONTH FROM CAST(Date AS DATE))) as prev_month_conversion_rate,

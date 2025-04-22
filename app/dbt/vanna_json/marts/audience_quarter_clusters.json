@@ -1,11 +1,11 @@
 {
   "name": "audience_quarter_clusters",
-  "description": "Identifies and analyzes high-performing target audience clusters for the current quarter (last 3 months of available data).\nThis model groups campaigns by Company, Target_Audience, Location, Channel, and Goal to form clusters.\nIt calculates key performance indicators (KPIs) like average ROI, conversion rate, CTR, and acquisition cost for each cluster.\nClusters are then scored using normalized z-scores against company averages, ranked within their company and audience segment, and assigned performance tiers with recommended actions.\nThe goal is to highlight the most effective combinations of targeting dimensions for strategic decision-making and budget allocation.\nThis model powers the 'High-ROI Target Audience Clusters' visualization in the Cohort Analysis dashboard tab.\n",
+  "description": "Identifies high-performing target audience clusters for the current quarter (based on the last 3 months of available data). Clusters are defined by the unique combination of Company, Target_Audience, Location, Channel, and Goal. This model calculates key performance metrics (KPIs), normalized scores (z-scores) relative to company averages, ranks clusters within companies and specific audiences, assigns performance tiers, and suggests recommended actions. It filters for clusters with at least 3 campaigns for statistical significance. Designed for use in dashboards, particularly for cohort analysis and identifying high-ROI audience segments.\n",
   "columns": [
     {
       "name": "Company",
       "type": "VARCHAR",
-      "description": "The name of the company associated with the campaign cluster. This serves as the primary dimension for analysis.",
+      "description": "The company associated with the marketing campaign data.",
       "tests": [
         "not_null",
         "dbt_utils.unique_combination_of_columns",
@@ -16,7 +16,7 @@
     {
       "name": "Target_Audience",
       "type": "VARCHAR",
-      "description": "The specific audience segment targeted by the campaigns within the cluster. This serves as the secondary dimension.",
+      "description": "The specific audience segment targeted by the campaigns within the cluster.",
       "tests": [
         "not_null",
         "relationships"
@@ -36,7 +36,7 @@
     {
       "name": "channel",
       "type": "VARCHAR",
-      "description": "The marketing channel used for the campaigns in the cluster (e.g., Facebook, Twitter, Instagram). Renamed from source column 'Channel_Used'.",
+      "description": "The marketing channel used for the campaigns in the cluster (e.g., Facebook, Twitter, Instagram).",
       "tests": [
         "not_null",
         "relationships"
@@ -46,7 +46,7 @@
     {
       "name": "goal",
       "type": "VARCHAR",
-      "description": "The primary objective of the campaigns within the cluster (e.g., Increase Sales, Brand Awareness). Renamed from source column 'Campaign_Goal'.",
+      "description": "The primary goal of the campaigns within the cluster (e.g., Increase Sales, Brand Awareness).",
       "tests": [
         "not_null",
         "relationships"
@@ -56,27 +56,27 @@
     {
       "name": "campaign_count",
       "type": "BIGINT",
-      "description": "The number of individual campaigns included in this specific cluster combination for the quarter. Clusters with less than 3 campaigns are excluded for statistical significance.",
+      "description": "The number of individual campaigns grouped within this cluster. Minimum value is 3.",
       "tests": [
         "not_null",
-        "dbt_expectations.expect_column_values_to_be_great_or_equal_to"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "avg_conversion_rate",
       "type": "DOUBLE",
-      "description": "The average conversion rate (conversions / clicks or impressions, depending on definition) across all campaigns within the cluster for the quarter.",
+      "description": "The average conversion rate across all campaigns within the cluster for the quarter.",
       "tests": [
         "not_null",
-        "dbt_expectations.expect_column_values_to_be_between"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "avg_roi",
       "type": "DOUBLE",
-      "description": "The average Return on Investment (ROI) across all campaigns within the cluster for the quarter. Calculated as (Revenue - Spend) / Spend.",
+      "description": "The average Return on Investment (ROI) across all campaigns within the cluster for the quarter.",
       "tests": [
         "not_null"
       ],
@@ -85,37 +85,36 @@
     {
       "name": "avg_acquisition_cost",
       "type": "DOUBLE",
-      "description": "The average cost to acquire a customer or achieve a conversion goal (Spend / Conversions) across campaigns in the cluster for the quarter.",
+      "description": "The average cost to acquire a customer or achieve a conversion across campaigns in the cluster for the quarter.",
       "tests": [
         "not_null",
-        "dbt_expectations.expect_column_values_to_be_great_or_equal_to"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "avg_ctr",
       "type": "FLOAT",
-      "description": "The average Click-Through Rate (Clicks / Impressions) across campaigns in the cluster for the quarter. Calculated as SUM(Clicks) / SUM(Impressions).",
+      "description": "The average Click-Through Rate (CTR) calculated as (Total Clicks / Total Impressions) for the cluster over the quarter. Can be null if total impressions are zero.",
       "tests": [
-        "not_null",
-        "dbt_expectations.expect_column_values_to_be_between"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "total_spend",
       "type": "DOUBLE",
-      "description": "The total calculated advertising spend for all campaigns within the cluster for the quarter. Calculated as SUM(Clicks * Acquisition_Cost) based on available data.",
+      "description": "The estimated total marketing spend for all campaigns within the cluster during the quarter.",
       "tests": [
         "not_null",
-        "dbt_expectations.expect_column_values_to_be_great_or_equal_to"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "total_revenue",
       "type": "DOUBLE",
-      "description": "The total calculated revenue generated by all campaigns within the cluster for the quarter. Calculated as SUM(Clicks * Acquisition_Cost * ROI) based on available data.",
+      "description": "The estimated total revenue generated by all campaigns within the cluster during the quarter, based on ROI.",
       "tests": [
         "not_null"
       ],
@@ -124,17 +123,17 @@
     {
       "name": "avg_audience_conversion_rate",
       "type": "DOUBLE",
-      "description": "The average conversion rate for all clusters belonging to the same Company and Target Audience combination within the quarter. Used for comparison within the audience segment.",
+      "description": "The average conversion rate for this specific Target_Audience across all its clusters within the same Company.",
       "tests": [
         "not_null",
-        "dbt_expectations.expect_column_values_to_be_between"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "avg_audience_roi",
       "type": "DOUBLE",
-      "description": "The average ROI for all clusters belonging to the same Company and Target Audience combination within the quarter. Used for comparison within the audience segment.",
+      "description": "The average ROI for this specific Target_Audience across all its clusters within the same Company.",
       "tests": [
         "not_null"
       ],
@@ -143,37 +142,36 @@
     {
       "name": "avg_audience_ctr",
       "type": "DOUBLE",
-      "description": "The average CTR for all clusters belonging to the same Company and Target Audience combination within the quarter. Used for comparison within the audience segment.",
+      "description": "The average CTR for this specific Target_Audience across all its clusters within the same Company. Can be null if underlying impressions are zero.",
       "tests": [
-        "not_null",
-        "dbt_expectations.expect_column_values_to_be_between"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "avg_audience_acquisition_cost",
       "type": "DOUBLE",
-      "description": "The average acquisition cost for all clusters belonging to the same Company and Target Audience combination within the quarter. Used for comparison within the audience segment.",
+      "description": "The average acquisition cost for this specific Target_Audience across all its clusters within the same Company.",
       "tests": [
         "not_null",
-        "dbt_expectations.expect_column_values_to_be_great_or_equal_to"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "cluster_count",
       "type": "BIGINT",
-      "description": "The total number of distinct clusters (Company, Target_Audience, Location, Channel, Goal combinations) found for this specific Company and Target Audience pair within the quarter.",
+      "description": "The total number of distinct clusters (Location, Channel, Goal combinations) for this specific Company and Target_Audience.",
       "tests": [
         "not_null",
-        "dbt_expectations.expect_column_values_to_be_great_or_equal_to"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "conversion_rate_z_score",
       "type": "DOUBLE",
-      "description": "The normalized z-score for the cluster's average conversion rate compared to the company's average and standard deviation for the quarter. Indicates performance relative to the company average (higher is better).",
+      "description": "The normalized score (z-score) indicating how many standard deviations the cluster's avg_conversion_rate is from the Company's average conversion rate.",
       "tests": [
         "not_null"
       ],
@@ -182,7 +180,7 @@
     {
       "name": "roi_z_score",
       "type": "DOUBLE",
-      "description": "The normalized z-score for the cluster's average ROI compared to the company's average and standard deviation for the quarter. Indicates performance relative to the company average (higher is better).",
+      "description": "The normalized score (z-score) indicating how many standard deviations the cluster's avg_roi is from the Company's average ROI.",
       "tests": [
         "not_null"
       ],
@@ -191,7 +189,7 @@
     {
       "name": "ctr_z_score",
       "type": "DOUBLE",
-      "description": "The normalized z-score for the cluster's average CTR compared to the company's average and standard deviation for the quarter. Indicates performance relative to the company average (higher is better).",
+      "description": "The normalized score (z-score) indicating how many standard deviations the cluster's avg_ctr is from the Company's average CTR.",
       "tests": [
         "not_null"
       ],
@@ -200,7 +198,7 @@
     {
       "name": "cost_efficiency_z_score",
       "type": "DOUBLE",
-      "description": "The normalized z-score for the cluster's cost efficiency (lower acquisition cost is better), compared to the company average and standard deviation for the quarter. Calculated with an inverse relationship so higher scores indicate better cost efficiency.",
+      "description": "The normalized score (z-score) for cost efficiency, calculated as the negative z-score of avg_acquisition_cost (lower cost is better, hence higher score).",
       "tests": [
         "not_null"
       ],
@@ -209,7 +207,7 @@
     {
       "name": "composite_performance_score",
       "type": "DOUBLE",
-      "description": "A weighted score combining the z-scores of conversion rate (35%), ROI (35%), CTR (15%), and cost efficiency (15%) to provide an overall performance measure for the cluster relative to the company average.",
+      "description": "A weighted score combining the z-scores of conversion rate (35%), ROI (35%), CTR (15%), and cost efficiency (15%) to represent overall cluster performance relative to the company.",
       "tests": [
         "not_null"
       ],
@@ -218,67 +216,67 @@
     {
       "name": "roi_rank",
       "type": "BIGINT",
-      "description": "The rank of this cluster within its Company based on average ROI (descending) for the quarter. Rank 1 indicates the highest ROI within the company.",
+      "description": "The rank of this cluster within its Company based on avg_roi (1 = highest ROI).",
       "tests": [
         "not_null",
-        "dbt_expectations.expect_column_values_to_be_great_or_equal_to"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "conversion_rate_rank",
       "type": "BIGINT",
-      "description": "The rank of this cluster within its Company based on average conversion rate (descending) for the quarter. Rank 1 indicates the highest conversion rate within the company.",
+      "description": "The rank of this cluster within its Company based on avg_conversion_rate (1 = highest conversion rate).",
       "tests": [
         "not_null",
-        "dbt_expectations.expect_column_values_to_be_great_or_equal_to"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "acquisition_cost_rank",
       "type": "BIGINT",
-      "description": "The rank of this cluster within its Company based on average acquisition cost (ascending) for the quarter. Rank 1 indicates the lowest acquisition cost (most efficient) within the company.",
+      "description": "The rank of this cluster within its Company based on avg_acquisition_cost (1 = lowest acquisition cost).",
       "tests": [
         "not_null",
-        "dbt_expectations.expect_column_values_to_be_great_or_equal_to"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "audience_roi_rank",
       "type": "BIGINT",
-      "description": "The rank of this cluster within its Company and Target Audience group based on average ROI (descending) for the quarter. Rank 1 indicates the highest ROI within that specific audience segment.",
+      "description": "The rank of this cluster within its Company and Target_Audience based on avg_roi (1 = highest ROI within that audience).",
       "tests": [
         "not_null",
-        "dbt_expectations.expect_column_values_to_be_great_or_equal_to"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "audience_conversion_rate_rank",
       "type": "BIGINT",
-      "description": "The rank of this cluster within its Company and Target Audience group based on average conversion rate (descending) for the quarter. Rank 1 indicates the highest conversion rate within that specific audience segment.",
+      "description": "The rank of this cluster within its Company and Target_Audience based on avg_conversion_rate (1 = highest conversion rate within that audience).",
       "tests": [
         "not_null",
-        "dbt_expectations.expect_column_values_to_be_great_or_equal_to"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "roi_percentile",
       "type": "FLOAT",
-      "description": "The percentile rank of the cluster's ROI within its Company for the quarter (calculated based on roi_rank / total_clusters). Values range from ~0 to 1, where lower values indicate better relative ROI performance compared to other clusters in the same company.",
+      "description": "The percentile rank of the cluster within the Company based on ROI rank (lower value indicates better rank, e.g., 0.1 means top 10%).",
       "tests": [
         "not_null",
-        "dbt_expectations.expect_column_values_to_be_between"
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "is_high_performing_cluster",
       "type": "BOOLEAN",
-      "description": "A boolean flag indicating if the cluster ranks in the top 10% based on the composite performance score within its Company for the quarter (TRUE if top 10%, FALSE otherwise).",
+      "description": "Boolean flag indicating if the cluster is in the top 10% based on composite_performance_score within its Company.",
       "tests": [
         "not_null",
         "accepted_values"
@@ -288,7 +286,7 @@
     {
       "name": "performance_tier",
       "type": "VARCHAR",
-      "description": "A categorical tier assigned based on the composite performance score ('Exceptional', 'High Performing', 'Average', 'Underperforming', 'Poor'). Provides a quick assessment of the cluster's overall relative performance.",
+      "description": "Categorical tier assigned based on the composite_performance_score ('Exceptional', 'High Performing', 'Average', 'Underperforming', 'Poor').",
       "tests": [
         "not_null",
         "accepted_values"
@@ -298,7 +296,7 @@
     {
       "name": "recommended_action",
       "type": "VARCHAR",
-      "description": "A suggested action based on the performance tier (e.g., 'Increase investment', 'Monitor and optimize', 'Consider discontinuing'). Aims to guide strategic decisions regarding resource allocation for this cluster.",
+      "description": "A suggested action based on the performance_tier (e.g., 'Increase investment', 'Monitor and optimize').",
       "tests": [
         "not_null",
         "accepted_values"

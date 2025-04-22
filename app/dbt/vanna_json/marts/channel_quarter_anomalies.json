@@ -1,58 +1,69 @@
 {
   "name": "channel_quarter_anomalies",
-  "description": "Identifies anomalies in marketing channel performance on a quarterly basis. Compares key metrics (Conversion Rate, ROI, Acquisition Cost, Clicks, Impressions, CTR, Spend, Revenue) for the latest quarter against a rolling 3-quarter average using z-score methodology. Flags significant deviations (>2 standard deviations) to highlight potential issues or successes. Designed for performance monitoring and risk management dashboards.",
+  "description": "Identifies anomalies in marketing channel performance metrics on a quarterly basis for each company.\nIt calculates rolling statistics (mean, standard deviation) for key metrics (Conversion Rate, ROI, Acquisition Cost, Clicks, Impressions, CTR, Spend, Revenue, Campaign Count) over the previous 3 quarters.\nIt then compares the current quarter's metrics against these historical benchmarks using Z-scores.\nMetrics with an absolute Z-score greater than 2 are flagged as anomalies.\nThe model provides detailed statistics, Z-scores, anomaly flags for each metric, and summary indicators like `has_anomaly`, `anomaly_count`, and `anomaly_impact`.\nThis model is intended for use in dashboards for anomaly alerting, performance monitoring, and risk management.\nFilters data to only include the most recent quarter available in the source data.\n",
   "columns": [
     {
-      "name": "Channel_Used",
+      "name": "Company",
       "type": "VARCHAR",
-      "description": "The marketing channel being analyzed (e.g., Facebook, Instagram, Google Ads).",
+      "description": "The name of the company being analyzed. Primary dimension.",
       "tests": [
         "not_null",
-        "dbt_utils.unique_combination_of_columns"
+        "relationships"
       ],
       "tags": []
     },
     {
-      "name": "quarter",
-      "type": "DOUBLE",
-      "description": "A numerical representation of the year and quarter (calculated as YYYY * 4 + CEIL(Month / 3)). Represents the time period for the aggregated metrics.",
+      "name": "Channel_Used",
+      "type": "VARCHAR",
+      "description": "The marketing channel used (e.g., Facebook, Instagram, Pinterest). Secondary dimension.",
       "tests": [
-        "not_null"
+        "not_null",
+        "relationships",
+        "dbt_utils.unique_combination_of_columns"
       ],
       "tags": []
     },
     {
       "name": "avg_conversion_rate",
       "type": "DOUBLE",
-      "description": "The average conversion rate for the channel during the specified quarter.",
-      "tests": [],
+      "description": "The average conversion rate for the company and channel during the current quarter.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
       "tags": []
     },
     {
       "name": "conversion_rate_mean",
       "type": "DOUBLE",
-      "description": "The rolling average of the conversion rate over the previous 3 quarters for the channel. Used as the expected value.",
-      "tests": [],
+      "description": "The rolling average conversion rate over the previous 3 quarters for this company and channel.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
       "tags": []
     },
     {
       "name": "conversion_rate_std",
       "type": "DOUBLE",
-      "description": "The rolling standard deviation of the conversion rate over the previous 3 quarters for the channel. Used to measure variability.",
-      "tests": [],
+      "description": "The rolling population standard deviation of the conversion rate over the previous 3 quarters for this company and channel.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type",
+        "dbt_expectations.expect_column_values_to_be_non_negative"
+      ],
       "tags": []
     },
     {
       "name": "conversion_rate_z",
       "type": "DOUBLE",
-      "description": "The z-score for conversion rate in the quarter, calculated as (value - rolling_mean) / rolling_std. Measures deviation from the recent average in terms of standard deviations.",
-      "tests": [],
+      "description": "The Z-score for the current quarter's average conversion rate, indicating deviation from the rolling mean in terms of standard deviations. Null if standard deviation is zero or null.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
       "tags": []
     },
     {
       "name": "conversion_rate_anomaly",
       "type": "VARCHAR",
-      "description": "Flag indicating if the conversion rate for the quarter is considered an anomaly ('anomaly' if |z-score| > 2, 'normal' otherwise).",
+      "description": "Flag indicating if the conversion rate is an anomaly ('anomaly') or within expected range ('normal') based on an absolute Z-score threshold of 2.",
       "tests": [
         "not_null",
         "accepted_values"
@@ -62,35 +73,44 @@
     {
       "name": "avg_roi",
       "type": "DOUBLE",
-      "description": "The average Return on Investment (ROI) for the channel during the specified quarter.",
-      "tests": [],
+      "description": "The average Return on Investment (ROI) for the company and channel during the current quarter.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
       "tags": []
     },
     {
       "name": "roi_mean",
       "type": "DOUBLE",
-      "description": "The rolling average of the ROI over the previous 3 quarters for the channel.",
-      "tests": [],
+      "description": "The rolling average ROI over the previous 3 quarters for this company and channel.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
       "tags": []
     },
     {
       "name": "roi_std",
       "type": "DOUBLE",
-      "description": "The rolling standard deviation of the ROI over the previous 3 quarters for the channel.",
-      "tests": [],
+      "description": "The rolling population standard deviation of the ROI over the previous 3 quarters for this company and channel.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type",
+        "dbt_expectations.expect_column_values_to_be_non_negative"
+      ],
       "tags": []
     },
     {
       "name": "roi_z",
       "type": "DOUBLE",
-      "description": "The z-score for ROI in the quarter.",
-      "tests": [],
+      "description": "The Z-score for the current quarter's average ROI. Null if standard deviation is zero or null.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
       "tags": []
     },
     {
       "name": "roi_anomaly",
       "type": "VARCHAR",
-      "description": "Flag indicating if the ROI for the quarter is considered an anomaly.",
+      "description": "Flag indicating if the ROI is an anomaly ('anomaly') or 'normal' based on an absolute Z-score threshold of 2.",
       "tests": [
         "not_null",
         "accepted_values"
@@ -100,35 +120,44 @@
     {
       "name": "avg_acquisition_cost",
       "type": "DOUBLE",
-      "description": "The average acquisition cost for the channel during the specified quarter.",
-      "tests": [],
+      "description": "The average acquisition cost for the company and channel during the current quarter.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
       "tags": []
     },
     {
       "name": "acquisition_cost_mean",
       "type": "DOUBLE",
-      "description": "The rolling average of the acquisition cost over the previous 3 quarters for the channel.",
-      "tests": [],
+      "description": "The rolling average acquisition cost over the previous 3 quarters for this company and channel.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
       "tags": []
     },
     {
       "name": "acquisition_cost_std",
       "type": "DOUBLE",
-      "description": "The rolling standard deviation of the acquisition cost over the previous 3 quarters for the channel.",
-      "tests": [],
+      "description": "The rolling population standard deviation of the acquisition cost over the previous 3 quarters for this company and channel.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type",
+        "dbt_expectations.expect_column_values_to_be_non_negative"
+      ],
       "tags": []
     },
     {
       "name": "acquisition_cost_z",
       "type": "DOUBLE",
-      "description": "The z-score for acquisition cost in the quarter.",
-      "tests": [],
+      "description": "The Z-score for the current quarter's average acquisition cost. Null if standard deviation is zero or null.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
       "tags": []
     },
     {
       "name": "acquisition_cost_anomaly",
       "type": "VARCHAR",
-      "description": "Flag indicating if the acquisition cost for the quarter is considered an anomaly.",
+      "description": "Flag indicating if the acquisition cost is an anomaly ('anomaly') or 'normal' based on an absolute Z-score threshold of 2.",
       "tests": [
         "not_null",
         "accepted_values"
@@ -138,37 +167,46 @@
     {
       "name": "total_clicks",
       "type": "HUGEINT",
-      "description": "The total number of clicks generated by the channel during the specified quarter.",
+      "description": "The total number of clicks for the company and channel during the current quarter.",
       "tests": [
-        "not_null"
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_of_type",
+        "dbt_expectations.expect_column_values_to_be_non_negative"
       ],
       "tags": []
     },
     {
       "name": "clicks_mean",
       "type": "DOUBLE",
-      "description": "The rolling average of total clicks over the previous 3 quarters for the channel.",
-      "tests": [],
+      "description": "The rolling average total clicks over the previous 3 quarters for this company and channel.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
       "tags": []
     },
     {
       "name": "clicks_std",
       "type": "DOUBLE",
-      "description": "The rolling standard deviation of total clicks over the previous 3 quarters for the channel.",
-      "tests": [],
+      "description": "The rolling population standard deviation of total clicks over the previous 3 quarters for this company and channel.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type",
+        "dbt_expectations.expect_column_values_to_be_non_negative"
+      ],
       "tags": []
     },
     {
       "name": "clicks_z",
       "type": "DOUBLE",
-      "description": "The z-score for total clicks in the quarter.",
-      "tests": [],
+      "description": "The Z-score for the current quarter's total clicks. Null if standard deviation is zero or null.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
       "tags": []
     },
     {
       "name": "clicks_anomaly",
       "type": "VARCHAR",
-      "description": "Flag indicating if the total clicks for the quarter is considered an anomaly.",
+      "description": "Flag indicating if the total clicks count is an anomaly ('anomaly') or 'normal' based on an absolute Z-score threshold of 2.",
       "tests": [
         "not_null",
         "accepted_values"
@@ -178,37 +216,46 @@
     {
       "name": "total_impressions",
       "type": "HUGEINT",
-      "description": "The total number of impressions generated by the channel during the specified quarter.",
+      "description": "The total number of impressions for the company and channel during the current quarter.",
       "tests": [
-        "not_null"
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_of_type",
+        "dbt_expectations.expect_column_values_to_be_non_negative"
       ],
       "tags": []
     },
     {
       "name": "impressions_mean",
       "type": "DOUBLE",
-      "description": "The rolling average of total impressions over the previous 3 quarters for the channel.",
-      "tests": [],
+      "description": "The rolling average total impressions over the previous 3 quarters for this company and channel.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
       "tags": []
     },
     {
       "name": "impressions_std",
       "type": "DOUBLE",
-      "description": "The rolling standard deviation of total impressions over the previous 3 quarters for the channel.",
-      "tests": [],
+      "description": "The rolling population standard deviation of total impressions over the previous 3 quarters for this company and channel.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type",
+        "dbt_expectations.expect_column_values_to_be_non_negative"
+      ],
       "tags": []
     },
     {
       "name": "impressions_z",
       "type": "DOUBLE",
-      "description": "The z-score for total impressions in the quarter.",
-      "tests": [],
+      "description": "The Z-score for the current quarter's total impressions. Null if standard deviation is zero or null.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
       "tags": []
     },
     {
       "name": "impressions_anomaly",
       "type": "VARCHAR",
-      "description": "Flag indicating if the total impressions for the quarter is considered an anomaly.",
+      "description": "Flag indicating if the total impressions count is an anomaly ('anomaly') or 'normal' based on an absolute Z-score threshold of 2.",
       "tests": [
         "not_null",
         "accepted_values"
@@ -218,35 +265,45 @@
     {
       "name": "quarterly_ctr",
       "type": "FLOAT",
-      "description": "The calculated Click-Through Rate (CTR) for the channel during the specified quarter (Total Clicks / Total Impressions).",
-      "tests": [],
+      "description": "The calculated Click-Through Rate (CTR) for the company and channel during the current quarter (Total Clicks / Total Impressions).",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type",
+        "dbt_expectations.expect_column_values_to_be_between"
+      ],
       "tags": []
     },
     {
       "name": "ctr_mean",
       "type": "DOUBLE",
-      "description": "The rolling average of the quarterly CTR over the previous 3 quarters for the channel.",
-      "tests": [],
+      "description": "The rolling average CTR over the previous 3 quarters for this company and channel.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
       "tags": []
     },
     {
       "name": "ctr_std",
       "type": "DOUBLE",
-      "description": "The rolling standard deviation of the quarterly CTR over the previous 3 quarters for the channel.",
-      "tests": [],
+      "description": "The rolling population standard deviation of the CTR over the previous 3 quarters for this company and channel.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type",
+        "dbt_expectations.expect_column_values_to_be_non_negative"
+      ],
       "tags": []
     },
     {
       "name": "ctr_z",
       "type": "DOUBLE",
-      "description": "The z-score for quarterly CTR in the quarter.",
-      "tests": [],
+      "description": "The Z-score for the current quarter's CTR. Null if standard deviation is zero or null.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
       "tags": []
     },
     {
       "name": "ctr_anomaly",
       "type": "VARCHAR",
-      "description": "Flag indicating if the quarterly CTR for the quarter is considered an anomaly.",
+      "description": "Flag indicating if the CTR is an anomaly ('anomaly') or 'normal' based on an absolute Z-score threshold of 2.",
       "tests": [
         "not_null",
         "accepted_values"
@@ -256,37 +313,46 @@
     {
       "name": "total_spend",
       "type": "DOUBLE",
-      "description": "The total calculated spend for the channel during the specified quarter (SUM of Clicks * Acquisition_Cost).",
+      "description": "The total calculated spend for the company and channel during the current quarter.",
       "tests": [
-        "not_null"
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_of_type",
+        "dbt_expectations.expect_column_values_to_be_non_negative"
       ],
       "tags": []
     },
     {
       "name": "spend_mean",
       "type": "DOUBLE",
-      "description": "The rolling average of total spend over the previous 3 quarters for the channel.",
-      "tests": [],
+      "description": "The rolling average total spend over the previous 3 quarters for this company and channel.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
       "tags": []
     },
     {
       "name": "spend_std",
       "type": "DOUBLE",
-      "description": "The rolling standard deviation of total spend over the previous 3 quarters for the channel.",
-      "tests": [],
+      "description": "The rolling population standard deviation of total spend over the previous 3 quarters for this company and channel.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type",
+        "dbt_expectations.expect_column_values_to_be_non_negative"
+      ],
       "tags": []
     },
     {
       "name": "spend_z",
       "type": "DOUBLE",
-      "description": "The z-score for total spend in the quarter.",
-      "tests": [],
+      "description": "The Z-score for the current quarter's total spend. Null if standard deviation is zero or null.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
       "tags": []
     },
     {
       "name": "spend_anomaly",
       "type": "VARCHAR",
-      "description": "Flag indicating if the total spend for the quarter is considered an anomaly.",
+      "description": "Flag indicating if the total spend is an anomaly ('anomaly') or 'normal' based on an absolute Z-score threshold of 2.",
       "tests": [
         "not_null",
         "accepted_values"
@@ -296,37 +362,94 @@
     {
       "name": "total_revenue",
       "type": "DOUBLE",
-      "description": "The total calculated revenue for the channel during the specified quarter (SUM of Clicks * Acquisition_Cost * ROI).",
+      "description": "The total calculated revenue for the company and channel during the current quarter.",
       "tests": [
-        "not_null"
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_of_type"
       ],
       "tags": []
     },
     {
       "name": "revenue_mean",
       "type": "DOUBLE",
-      "description": "The rolling average of total revenue over the previous 3 quarters for the channel.",
-      "tests": [],
+      "description": "The rolling average total revenue over the previous 3 quarters for this company and channel.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
       "tags": []
     },
     {
       "name": "revenue_std",
       "type": "DOUBLE",
-      "description": "The rolling standard deviation of total revenue over the previous 3 quarters for the channel.",
-      "tests": [],
+      "description": "The rolling population standard deviation of total revenue over the previous 3 quarters for this company and channel.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type",
+        "dbt_expectations.expect_column_values_to_be_non_negative"
+      ],
       "tags": []
     },
     {
       "name": "revenue_z",
       "type": "DOUBLE",
-      "description": "The z-score for total revenue in the quarter.",
-      "tests": [],
+      "description": "The Z-score for the current quarter's total revenue. Null if standard deviation is zero or null.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
       "tags": []
     },
     {
       "name": "revenue_anomaly",
       "type": "VARCHAR",
-      "description": "Flag indicating if the total revenue for the quarter is considered an anomaly.",
+      "description": "Flag indicating if the total revenue is an anomaly ('anomaly') or 'normal' based on an absolute Z-score threshold of 2.",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
+      "tags": []
+    },
+    {
+      "name": "campaign_count",
+      "type": "BIGINT",
+      "description": "The count of distinct campaigns run by the company on the channel during the current quarter.",
+      "tests": [
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_of_type",
+        "dbt_expectations.expect_column_values_to_be_non_negative"
+      ],
+      "tags": []
+    },
+    {
+      "name": "campaign_count_mean",
+      "type": "DOUBLE",
+      "description": "The rolling average campaign count over the previous 3 quarters for this company and channel.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
+      "tags": []
+    },
+    {
+      "name": "campaign_count_std",
+      "type": "DOUBLE",
+      "description": "The rolling population standard deviation of the campaign count over the previous 3 quarters for this company and channel.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type",
+        "dbt_expectations.expect_column_values_to_be_non_negative"
+      ],
+      "tags": []
+    },
+    {
+      "name": "campaign_count_z",
+      "type": "DOUBLE",
+      "description": "The Z-score for the current quarter's campaign count. Null if standard deviation is zero or null.",
+      "tests": [
+        "dbt_expectations.expect_column_values_to_be_of_type"
+      ],
+      "tags": []
+    },
+    {
+      "name": "campaign_count_anomaly",
+      "type": "VARCHAR",
+      "description": "Flag indicating if the campaign count is an anomaly ('anomaly') or 'normal' based on an absolute Z-score threshold of 2.",
       "tests": [
         "not_null",
         "accepted_values"
@@ -336,26 +459,28 @@
     {
       "name": "has_anomaly",
       "type": "BOOLEAN",
-      "description": "Boolean flag (TRUE/FALSE) indicating if *any* metric for this channel and quarter was flagged as an anomaly.",
+      "description": "A boolean flag indicating if at least one metric for this company/channel combination in the current quarter was flagged as an anomaly (TRUE) or if all metrics were normal (FALSE).",
       "tests": [
-        "not_null"
+        "not_null",
+        "accepted_values"
       ],
       "tags": []
     },
     {
       "name": "anomaly_count",
       "type": "INTEGER",
-      "description": "The total number of individual metrics flagged as anomalies for this channel and quarter.",
+      "description": "The total number of metrics flagged as anomalies for this company/channel combination in the current quarter. Provides a measure of anomaly severity.",
       "tests": [
         "not_null",
-        "dbt_expectations.expect_column_values_to_be_between"
+        "dbt_expectations.expect_column_values_to_be_of_type",
+        "dbt_expectations.expect_column_values_to_be_non_negative"
       ],
       "tags": []
     },
     {
       "name": "anomaly_impact",
       "type": "VARCHAR",
-      "description": "Overall assessment of the anomaly's direction ('positive' if driven by favorable deviations, 'negative' if driven by unfavorable deviations, 'normal' if no significant anomalies).",
+      "description": "A categorical assessment ('positive', 'negative', 'normal') of the overall impact of the detected anomalies. 'positive' indicates anomalies generally favorable to business goals (e.g., high ROI, high Revenue, low Cost), 'negative' indicates unfavorable anomalies. 'normal' if no significant anomalies impacting overall performance direction are detected.",
       "tests": [
         "not_null",
         "accepted_values"

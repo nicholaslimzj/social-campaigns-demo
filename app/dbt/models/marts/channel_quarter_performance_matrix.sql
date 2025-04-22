@@ -111,8 +111,8 @@ combination_metrics AS (
         SUM(s.Clicks) AS total_clicks,
         SUM(s.Impressions) AS total_impressions,
         CAST(SUM(s.Clicks) AS FLOAT) / NULLIF(SUM(s.Impressions), 0) AS avg_ctr,
-        SUM(s.Clicks * s.Acquisition_Cost) AS total_spend,
-        SUM(s.Clicks * s.Acquisition_Cost * s.ROI) AS total_revenue
+        SUM(s.Clicks * s.Conversion_Rate * s.Acquisition_Cost) AS total_spend,
+        SUM(s.Clicks * s.Conversion_Rate * s.Acquisition_Cost * (1 + s.ROI)) AS total_revenue
     FROM all_combinations c
     LEFT JOIN current_quarter_data s
         ON c.Channel_Used = s.Channel_Used

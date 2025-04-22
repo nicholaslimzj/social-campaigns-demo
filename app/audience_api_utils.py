@@ -77,21 +77,95 @@ def get_company_audiences(company_id: str, include_metrics: bool = False) -> Dic
     # and maintains the hierarchical dimension structure with Company as primary dimension
     if include_metrics:
         query = """
+        WITH company_metrics AS (
+            SELECT 
+                Target_Audience as audience_id,
+                campaign_count,
+                avg_conversion_rate,
+                avg_roi,
+                avg_acquisition_cost,
+                quarterly_ctr as avg_ctr,
+                has_anomaly,
+                CASE
+                    WHEN has_anomaly = TRUE THEN anomaly_description
+                    ELSE NULL
+                END as anomaly_description
+            FROM audience_quarter_anomalies
+            WHERE Company = ?
+        ),
+        -- Get industry benchmarks for all metrics in one CTE
+        industry_benchmarks AS (
+            SELECT 
+                dimension,
+                metric,
+                entity as audience_id,
+                metric_value,
+                metric_rank,
+                total_entities,
+                CAST(metric_rank AS FLOAT) / total_entities as percentile_rank
+            FROM dimensions_quarter_performance_rankings
+            WHERE dimension = 'audience'
+            AND metric IN ('roi', 'conversion_rate', 'acquisition_cost', 'ctr')
+        ),
+        -- Pivot the industry benchmarks to get one row per audience
+        industry_metrics AS (
+            SELECT
+                audience_id,
+                MAX(CASE WHEN metric = 'roi' THEN metric_value END) as industry_roi,
+                MAX(CASE WHEN metric = 'roi' THEN percentile_rank END) as roi_percentile,
+                MAX(CASE WHEN metric = 'conversion_rate' THEN metric_value END) as industry_conversion_rate,
+                MAX(CASE WHEN metric = 'conversion_rate' THEN percentile_rank END) as conversion_percentile,
+                MAX(CASE WHEN metric = 'acquisition_cost' THEN metric_value END) as industry_acquisition_cost,
+                MAX(CASE WHEN metric = 'acquisition_cost' THEN percentile_rank END) as acquisition_percentile,
+                MAX(CASE WHEN metric = 'ctr' THEN metric_value END) as industry_ctr,
+                MAX(CASE WHEN metric = 'ctr' THEN percentile_rank END) as ctr_percentile
+            FROM industry_benchmarks
+            GROUP BY audience_id
+        )
+        -- Join company metrics with industry benchmarks
         SELECT 
-            Target_Audience as audience_id,
-            campaign_count,
-            avg_conversion_rate,
-            avg_roi,
-            avg_acquisition_cost,
-            quarterly_ctr as avg_ctr,
-            has_anomaly,
-            CASE
-                WHEN has_anomaly = TRUE THEN anomaly_description
-                ELSE NULL
-            END as anomaly_description
-        FROM audience_quarter_anomalies
-        WHERE Company = ?
-        ORDER BY avg_roi DESC
+            c.audience_id,
+            c.campaign_count,
+            c.avg_conversion_rate,
+            c.avg_roi,
+            c.avg_acquisition_cost,
+            c.avg_ctr,
+            c.has_anomaly,
+            c.anomaly_description,
+            -- Industry benchmarks
+            i.industry_conversion_rate,
+            i.industry_roi,
+            i.industry_acquisition_cost,
+            i.industry_ctr,
+            -- Percentile rankings
+            i.conversion_percentile,
+            i.roi_percentile,
+            i.acquisition_percentile,
+            i.ctr_percentile,
+            -- Performance comparisons
+            CASE 
+                WHEN c.avg_conversion_rate > i.industry_conversion_rate THEN 'above_average'
+                WHEN c.avg_conversion_rate < i.industry_conversion_rate THEN 'below_average'
+                ELSE 'average'
+            END as conversion_performance,
+            CASE 
+                WHEN c.avg_roi > i.industry_roi THEN 'above_average'
+                WHEN c.avg_roi < i.industry_roi THEN 'below_average'
+                ELSE 'average'
+            END as roi_performance,
+            CASE 
+                WHEN c.avg_acquisition_cost < i.industry_acquisition_cost THEN 'above_average'
+                WHEN c.avg_acquisition_cost > i.industry_acquisition_cost THEN 'below_average'
+                ELSE 'average'
+            END as acquisition_performance,
+            CASE 
+                WHEN c.avg_ctr > i.industry_ctr THEN 'above_average'
+                WHEN c.avg_ctr < i.industry_ctr THEN 'below_average'
+                ELSE 'average'
+            END as ctr_performance
+        FROM company_metrics c
+        LEFT JOIN industry_metrics i ON c.audience_id = i.audience_id
+        ORDER BY c.avg_roi DESC
         """
     else:
         query = """
@@ -105,6 +179,56 @@ def get_company_audiences(company_id: str, include_metrics: bool = False) -> Dic
     
     try:
         results = execute_query(query, [company_id])
+        
+        # If include_metrics is True, enhance the results with performance tier
+        if include_metrics:
+            for result in results:
+                # Calculate overall performance tier based on benchmark comparisons
+                above_average_count = sum(1 for perf in [
+                    result.get('conversion_performance', ''),
+                    result.get('roi_performance', ''),
+                    result.get('acquisition_performance', ''),
+                    result.get('ctr_performance', '')
+                ] if perf == 'above_average')
+                
+                if above_average_count >= 3:
+                    result['overall_performance'] = 'excellent'
+                elif above_average_count == 2:
+                    result['overall_performance'] = 'good'
+                elif above_average_count == 1:
+                    result['overall_performance'] = 'average'
+                else:
+                    result['overall_performance'] = 'below_average'
+                
+                # Add structured benchmark data
+                result['industry_benchmarks'] = {
+                    'conversion_rate': result.pop('industry_conversion_rate', None),
+                    'roi': result.pop('industry_roi', None),
+                    'acquisition_cost': result.pop('industry_acquisition_cost', None),
+                    'ctr': result.pop('industry_ctr', None)
+                }
+                
+                result['percentiles'] = {
+                    'conversion_rate': result.pop('conversion_percentile', None),
+                    'roi': result.pop('roi_percentile', None),
+                    'acquisition_cost': result.pop('acquisition_percentile', None),
+                    'ctr': result.pop('ctr_percentile', None)
+                }
+                
+                result['performance'] = {
+                    'conversion_rate': result.pop('conversion_performance', None),
+                    'roi': result.pop('roi_performance', None),
+                    'acquisition_cost': result.pop('acquisition_performance', None),
+                    'ctr': result.pop('ctr_performance', None),
+                    'overall': result.pop('overall_performance', None)
+                }
+                
+                # Add anomaly information
+                result['anomaly'] = {
+                    'has_anomaly': result.get('has_anomaly', False),
+                    'description': result.pop('anomaly_description', None)
+                }
+        
         return {"audiences": results}
     except Exception as e:
         logger.error(f"Error getting company audiences: {str(e)}")
@@ -245,20 +369,20 @@ def get_audience_performance_matrix(company_id: str, dimension_type: str = "goal
         logger.error(f"Error getting audience performance matrix: {str(e)}")
         return {"matrix": []}
 
-def get_audience_clusters(company_id: str, min_roi: float = 0, min_conversion_rate: float = 0) -> Dict[str, List[Dict[str, Any]]]:
+def get_audience_clusters(company_id: str, limit: int = 5) -> Dict[str, Any]:
     """
-    Get audience clustering data for a specific company.
+    Get high-performing audience clusters for a specific company, separated by ROI and conversion rate.
     
     Args:
         company_id: Company name to get audience clusters for
-        min_roi: Minimum ROI threshold for filtering
-        min_conversion_rate: Minimum conversion rate threshold for filtering
+        limit: Maximum number of clusters to return for each category (default: 5)
         
     Returns:
-        Dict[str, List[Dict[str, Any]]]: Audience clusters for the company
+        Dict with high_roi and high_conversion audience lists
     """
-    # Query to get audience clusters from the pre-computed model
-    clusters_query = """
+    
+    # Query to get high ROI audience clusters
+    high_roi_query = """
     SELECT 
         Target_Audience as audience_id,
         Location as location,
@@ -274,161 +398,113 @@ def get_audience_clusters(company_id: str, min_roi: float = 0, min_conversion_ra
         composite_performance_score as performance_score,
         performance_tier,
         recommended_action,
-        is_high_performing_cluster
+        is_high_performing_cluster,
+        avg_audience_conversion_rate,
+        avg_audience_roi,
+        avg_audience_ctr,
+        avg_audience_acquisition_cost
     FROM audience_quarter_clusters
     WHERE Company = ?
-    AND avg_roi >= ?
-    AND avg_conversion_rate >= ?
-    ORDER BY composite_performance_score DESC
+    AND is_high_performing_cluster = TRUE
+    ORDER BY avg_roi DESC
+    LIMIT ?
     """
     
-    # Query to get audience metrics summary
-    metrics_query = """
+    # Query to get high conversion rate audience clusters
+    high_conversion_query = """
     SELECT 
         Target_Audience as audience_id,
-        AVG(avg_conversion_rate) as conversion_rate,
-        AVG(avg_roi) as roi,
-        AVG(avg_acquisition_cost) as acquisition_cost,
-        AVG(avg_ctr) as ctr,
-        SUM(total_spend) as total_spend,
-        SUM(total_revenue) as total_revenue,
-        SUM(campaign_count) as campaign_count
+        Location as location,
+        channel,
+        goal,
+        campaign_count,
+        avg_conversion_rate as conversion_rate,
+        avg_roi as roi,
+        avg_acquisition_cost as acquisition_cost,
+        avg_ctr as ctr,
+        total_spend,
+        total_revenue,
+        composite_performance_score as performance_score,
+        performance_tier,
+        recommended_action,
+        is_high_performing_cluster,
+        avg_audience_conversion_rate,
+        avg_audience_roi,
+        avg_audience_ctr,
+        avg_audience_acquisition_cost
     FROM audience_quarter_clusters
     WHERE Company = ?
-    GROUP BY Target_Audience
-    HAVING AVG(avg_roi) >= ? AND AVG(avg_conversion_rate) >= ?
-    ORDER BY AVG(composite_performance_score) DESC
+    AND is_high_performing_cluster = TRUE
+    ORDER BY avg_conversion_rate DESC
+    LIMIT ?
     """
     
-    # Query to find related audiences based on cluster patterns
-    related_query = """
-    WITH audience_channel_goals AS (
-        SELECT DISTINCT
-            Target_Audience,
-            channel,
-            goal
-        FROM audience_quarter_clusters
-        WHERE Company = ?
-    ),
-    audience_pairs AS (
-        SELECT
-            a1.Target_Audience as audience1,
-            a2.Target_Audience as audience2,
-            COUNT(*) as common_patterns
-        FROM audience_channel_goals a1
-        JOIN audience_channel_goals a2 
-            ON a1.channel = a2.channel 
-            AND a1.goal = a2.goal 
-            AND a1.Target_Audience != a2.Target_Audience
-        GROUP BY a1.Target_Audience, a2.Target_Audience
-    )
-    SELECT * FROM audience_pairs
-    ORDER BY common_patterns DESC
-    LIMIT 100
-    """
     
     try:
-        # Get audience clusters
-        clusters = execute_query(clusters_query, [company_id, min_roi, min_conversion_rate])
         
-        # Get audience metrics summary
-        metrics = execute_query(metrics_query, [company_id, min_roi, min_conversion_rate])
+        # Get high ROI audience clusters
+        high_roi_clusters = execute_query(high_roi_query, [company_id, limit])
         
-        # Get related audiences
-        related = execute_query(related_query, [company_id])
+        # Get high conversion rate audience clusters
+        high_conversion_clusters = execute_query(high_conversion_query, [company_id, limit])
         
-        # Process the data to create audience clusters
-        audience_data = {}
+        # Process the clusters to create a simplified response format
+        high_roi_results = []
+        high_conversion_results = []
         
-        # First, add base metrics for each audience
-        for metric in metrics:
-            audience_id = metric.get('audience_id')
-            audience_data[audience_id] = {
-                'audience_id': audience_id,
-                'metrics': metric,
-                'clusters': [],
-                'related_audiences': []
-            }
+        # Process high ROI clusters
+        for cluster in high_roi_clusters:
+            high_roi_results.append({
+                'audience_id': cluster.get('audience_id'),
+                'location': cluster.get('location'),
+                'channel': cluster.get('channel'),
+                'goal': cluster.get('goal'),
+                'campaign_count': cluster.get('campaign_count'),
+                'conversion_rate': cluster.get('conversion_rate'),
+                'roi': cluster.get('roi'),
+                'acquisition_cost': cluster.get('acquisition_cost'),
+                'ctr': cluster.get('ctr'),
+                'total_spend': cluster.get('total_spend'),
+                'total_revenue': cluster.get('total_revenue'),
+                'performance_score': cluster.get('performance_score'),
+                'performance_tier': cluster.get('performance_tier'),
+                'recommended_action': cluster.get('recommended_action'),
+                'avg_audience_conversion_rate': cluster.get('avg_audience_conversion_rate'),
+                'avg_audience_roi': cluster.get('avg_audience_roi'),
+                'avg_audience_ctr': cluster.get('avg_audience_ctr'),
+                'avg_audience_acquisition_cost': cluster.get('avg_audience_acquisition_cost')
+            })
         
-        # Add clusters for each audience
-        for cluster in clusters:
-            audience_id = cluster.get('audience_id')
-            if audience_id in audience_data:
-                audience_data[audience_id]['clusters'].append({
-                    'location': cluster.get('location'),
-                    'channel': cluster.get('channel'),
-                    'goal': cluster.get('goal'),
-                    'campaign_count': cluster.get('campaign_count'),
-                    'conversion_rate': cluster.get('conversion_rate'),
-                    'roi': cluster.get('roi'),
-                    'acquisition_cost': cluster.get('acquisition_cost'),
-                    'ctr': cluster.get('ctr'),
-                    'total_spend': cluster.get('total_spend'),
-                    'total_revenue': cluster.get('total_revenue'),
-                    'performance_score': cluster.get('performance_score'),
-                    'performance_tier': cluster.get('performance_tier'),
-                    'recommended_action': cluster.get('recommended_action'),
-                    'is_high_performing': cluster.get('is_high_performing_cluster')
-                })
-        
-        # Add related audiences
-        for rel in related:
-            audience1 = rel.get('audience1')
-            audience2 = rel.get('audience2')
-            common_patterns = rel.get('common_patterns')
-            
-            if audience1 in audience_data:
-                audience_data[audience1]['related_audiences'].append({
-                    'audience_id': audience2,
-                    'common_patterns': common_patterns
-                })
-        
-        # Convert to list and sort by performance
-        result = list(audience_data.values())
-        result.sort(key=lambda x: x['metrics'].get('roi', 0), reverse=True)
-        
-        # Define clusters based on performance tiers from the data
-        high_performers = []
-        mid_performers = []
-        low_performers = []
-        
-        for audience in result:
-            # Check if this audience has any high-performing clusters
-            has_high_performing = any(cluster.get('is_high_performing') for cluster in audience.get('clusters', []))
-            
-            # Get the average performance score across all clusters
-            clusters = audience.get('clusters', [])
-            if clusters:
-                avg_score = sum(cluster.get('performance_score', 0) for cluster in clusters) / len(clusters)
-            else:
-                avg_score = 0
-            
-            # Add performance score to the audience data
-            audience['performance_score'] = avg_score
-            
-            # Assign to performance tiers
-            if has_high_performing or avg_score > 0.7:
-                high_performers.append(audience)
-            elif avg_score > 0:
-                mid_performers.append(audience)
-            else:
-                low_performers.append(audience)
-        
-        # Sort clusters by performance score
-        high_performers.sort(key=lambda x: x.get('performance_score', 0), reverse=True)
-        mid_performers.sort(key=lambda x: x.get('performance_score', 0), reverse=True)
-        low_performers.sort(key=lambda x: x.get('performance_score', 0), reverse=True)
+        # Process high conversion rate clusters
+        for cluster in high_conversion_clusters:
+            high_conversion_results.append({
+                'audience_id': cluster.get('audience_id'),
+                'location': cluster.get('location'),
+                'channel': cluster.get('channel'),
+                'goal': cluster.get('goal'),
+                'campaign_count': cluster.get('campaign_count'),
+                'conversion_rate': cluster.get('conversion_rate'),
+                'roi': cluster.get('roi'),
+                'acquisition_cost': cluster.get('acquisition_cost'),
+                'ctr': cluster.get('ctr'),
+                'total_spend': cluster.get('total_spend'),
+                'total_revenue': cluster.get('total_revenue'),
+                'performance_score': cluster.get('performance_score'),
+                'performance_tier': cluster.get('performance_tier'),
+                'recommended_action': cluster.get('recommended_action'),
+                'avg_audience_conversion_rate': cluster.get('avg_audience_conversion_rate'),
+                'avg_audience_roi': cluster.get('avg_audience_roi'),
+                'avg_audience_ctr': cluster.get('avg_audience_ctr'),
+                'avg_audience_acquisition_cost': cluster.get('avg_audience_acquisition_cost')
+            })
         
         return {
-            "clusters": [
-                {"name": "High Performers", "audiences": high_performers},
-                {"name": "Mid Performers", "audiences": mid_performers},
-                {"name": "Low Performers", "audiences": low_performers}
-            ]
+            "high_roi": high_roi_results,
+            "high_conversion": high_conversion_results
         }
     except Exception as e:
         logger.error(f"Error getting audience clusters: {str(e)}")
-        return {"clusters": []}
+        return {"high_roi": [], "high_conversion": []}
 
 def get_audience_benchmarks(company_id: str) -> Dict[str, List[Dict[str, Any]]]:
     """

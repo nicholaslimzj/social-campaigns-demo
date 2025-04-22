@@ -50,8 +50,8 @@ max_date AS (
     SELECT 
         MAX(month_id) as max_month_id,
         -- Extract month and year components for seasonal adjustments
-        MAX(month_id) % 100 as max_month,
-        MAX(month_id) / 100 as max_year
+        CAST(MAX(month_id) % 100 AS INTEGER) as max_month,
+        CAST(MAX(month_id) / 100 AS INTEGER) as max_year
     FROM monthly_metrics
 ),
 
@@ -166,20 +166,23 @@ forecast_months AS (
         md.max_year,
         -- Generate the 3 months after max_month_id
         s.period AS forecast_period,
-        -- Calculate actual month_id for each forecast period
-        CASE 
-            WHEN (md.max_month + s.period) <= 12 THEN 
-                (md.max_year * 100) + (md.max_month + s.period)
-            ELSE 
-                ((md.max_year + 1) * 100) + ((md.max_month + s.period) - 12)
-        END AS forecast_month_id,
+        -- Calculate month and year for each forecast period
+        -- For example, if max_month is 12 (December) and max_year is 2022:
+        -- Period 1: Jan 2023 (month=1, year=2023)
+        -- Period 2: Feb 2023 (month=2, year=2023)
+        -- Period 3: Mar 2023 (month=3, year=2023)
+        
         -- Calculate month number (1-12) for each forecast period
-        CASE 
-            WHEN (md.max_month + s.period) <= 12 THEN 
-                md.max_month + s.period
-            ELSE 
-                (md.max_month + s.period) - 12
-        END AS forecast_month
+        1 + MOD(md.max_month + s.period - 1, 12) AS forecast_month,
+        
+        -- Calculate year for each forecast period (cast to integer to avoid decimal issues)
+        CAST(md.max_year + FLOOR((md.max_month + s.period - 1) / 12) AS INTEGER) AS forecast_year,
+        
+        -- Calculate actual month_id for each forecast period (cast to integer to avoid decimal issues)
+        CAST(
+            (md.max_year + FLOOR((md.max_month + s.period - 1) / 12)) * 100 + 
+            (1 + MOD(md.max_month + s.period - 1, 12))
+        AS INTEGER) AS forecast_month_id
     FROM max_date md
     CROSS JOIN (VALUES (1), (2), (3)) AS s(period)
 ),
@@ -190,10 +193,7 @@ forecast_data AS (
         rgr.Company,
         fm.forecast_month_id AS month_id,
         fm.forecast_month AS month,
-        CASE 
-            WHEN fm.forecast_month_id % 100 <= 12 THEN fm.forecast_month_id / 100
-            ELSE (fm.forecast_month_id / 100) + 1
-        END AS year,
+        fm.forecast_year AS year,
         fm.forecast_period,
         
         -- Conversion Rate Forecast

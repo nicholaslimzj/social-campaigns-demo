@@ -1,42 +1,42 @@
 {
   "name": "audience_monthly_metrics",
-  "description": "Aggregates campaign performance metrics monthly by company and target audience. Provides insights into audience-specific trends, month-over-month changes, spend, revenue, and efficiency over time. Designed for dashboarding audience ROI and performance trends.",
+  "description": "Aggregates campaign performance metrics by company, target audience, and month.\nProvides audience-specific time-based analysis of effectiveness throughout the year.\nFollows a hierarchical dimension structure with Company as the primary dimension and Target_Audience as the secondary.\nCalculates key performance indicators (KPIs), month-over-month changes, spend, revenue, and audience share metrics.\nGrain: One record per Company, Target_Audience, and month.\n",
   "columns": [
     {
       "name": "Company",
       "type": "VARCHAR",
-      "description": "The name of the company associated with the campaign data. Primary dimension for aggregation.",
+      "description": "The name of the company running the campaigns.",
       "tests": [
         "not_null",
-        "relationships",
-        "dbt_utils.unique_combination_of_columns"
+        "relationship"
       ],
       "tags": []
     },
     {
       "name": "Target_Audience",
       "type": "VARCHAR",
-      "description": "The specific audience segment targeted by the campaigns. Secondary dimension for aggregation.",
+      "description": "The specific audience segment targeted by the campaigns.",
       "tests": [
         "not_null",
-        "relationships"
+        "relationship"
       ],
       "tags": []
     },
     {
       "name": "month",
       "type": "BIGINT",
-      "description": "The calendar month (1-12) extracted from the campaign date, used for monthly aggregation.",
+      "description": "The calendar month (1-12) for which the metrics are aggregated.",
       "tests": [
         "not_null",
-        "accepted_values"
+        "accepted_values",
+        "dbt_utils.unique_combination_of_columns"
       ],
       "tags": []
     },
     {
       "name": "campaign_count",
       "type": "BIGINT",
-      "description": "The total number of campaigns run for the specific company, target audience, and month.",
+      "description": "The total number of campaigns run for the specific company, audience, and month.",
       "tests": [
         "not_null",
         "dbt_utils.accepted_range"
@@ -46,8 +46,9 @@
     {
       "name": "avg_conversion_rate",
       "type": "DOUBLE",
-      "description": "The average conversion rate across all campaigns for the specific company, target audience, and month. Calculated as the average of individual campaign Conversion_Rate values.",
+      "description": "The average conversion rate across all campaigns for the specific company, audience, and month.",
       "tests": [
+        "not_null",
         "dbt_utils.accepted_range"
       ],
       "tags": []
@@ -55,15 +56,18 @@
     {
       "name": "avg_roi",
       "type": "DOUBLE",
-      "description": "The average Return on Investment (ROI) across all campaigns for the specific company, target audience, and month. Calculated as the average of individual campaign ROI values.",
-      "tests": [],
+      "description": "The average Return on Investment (ROI) across all campaigns for the specific company, audience, and month.",
+      "tests": [
+        "not_null"
+      ],
       "tags": []
     },
     {
       "name": "avg_acquisition_cost",
       "type": "DOUBLE",
-      "description": "The average cost to acquire a customer (Acquisition Cost) across all campaigns for the specific company, target audience, and month. Calculated as the average of individual campaign Acquisition_Cost values.",
+      "description": "The average cost to acquire a customer across all campaigns for the specific company, audience, and month.",
       "tests": [
+        "not_null",
         "dbt_utils.accepted_range"
       ],
       "tags": []
@@ -71,8 +75,9 @@
     {
       "name": "monthly_ctr",
       "type": "FLOAT",
-      "description": "The overall Click-Through Rate (CTR) for the specific company, target audience, and month. Calculated as SUM(Clicks) / SUM(Impressions).",
+      "description": "The overall Click-Through Rate (CTR) calculated as (Total Clicks / Total Impressions) for the specific company, audience, and month.",
       "tests": [
+        "not_null",
         "dbt_utils.accepted_range"
       ],
       "tags": []
@@ -80,7 +85,7 @@
     {
       "name": "total_clicks",
       "type": "HUGEINT",
-      "description": "The total number of clicks accumulated across all campaigns for the specific company, target audience, and month.",
+      "description": "The total number of clicks accumulated across all campaigns for the specific company, audience, and month.",
       "tests": [
         "not_null",
         "dbt_utils.accepted_range"
@@ -90,7 +95,7 @@
     {
       "name": "total_impressions",
       "type": "HUGEINT",
-      "description": "The total number of impressions accumulated across all campaigns for the specific company, target audience, and month.",
+      "description": "The total number of impressions accumulated across all campaigns for the specific company, audience, and month.",
       "tests": [
         "not_null",
         "dbt_utils.accepted_range"
@@ -100,7 +105,7 @@
     {
       "name": "total_spend",
       "type": "DOUBLE",
-      "description": "The estimated total spend for the specific company, target audience, and month. Calculated as SUM(Clicks * Acquisition_Cost).",
+      "description": "The estimated total spend for the specific company, audience, and month, calculated as SUM(Clicks * Conversion_Rate * Acquisition_Cost).",
       "tests": [
         "not_null",
         "dbt_utils.accepted_range"
@@ -110,42 +115,45 @@
     {
       "name": "total_revenue",
       "type": "DOUBLE",
-      "description": "The estimated total revenue generated for the specific company, target audience, and month. Calculated as SUM(Clicks * Acquisition_Cost * ROI).",
-      "tests": [],
+      "description": "The estimated total revenue for the specific company, audience, and month, calculated as SUM(Clicks * Conversion_Rate * Acquisition_Cost * (1 + ROI)).",
+      "tests": [
+        "not_null",
+        "dbt_utils.accepted_range"
+      ],
       "tags": []
     },
     {
       "name": "roi_vs_prev_month",
       "type": "DOUBLE",
-      "description": "The percentage change in average ROI compared to the previous month for the same company and target audience. NULL for the earliest month in the data.",
+      "description": "The percentage change in average ROI compared to the previous month for the same company and audience. Null for the first month of data.",
       "tests": [],
       "tags": []
     },
     {
       "name": "conversion_rate_vs_prev_month",
       "type": "DOUBLE",
-      "description": "The percentage change in average conversion rate compared to the previous month for the same company and target audience. NULL for the earliest month in the data.",
+      "description": "The percentage change in average conversion rate compared to the previous month for the same company and audience. Null for the first month of data.",
       "tests": [],
       "tags": []
     },
     {
       "name": "acquisition_cost_vs_prev_month",
       "type": "DOUBLE",
-      "description": "The percentage change in average acquisition cost compared to the previous month for the same company and target audience (positive value indicates improvement/lower cost). NULL for the earliest month in the data.",
+      "description": "The percentage change in average acquisition cost compared to the previous month for the same company and audience (positive value indicates improvement/lower cost). Null for the first month of data.",
       "tests": [],
       "tags": []
     },
     {
       "name": "ctr_vs_prev_month",
       "type": "FLOAT",
-      "description": "The percentage change in monthly CTR compared to the previous month for the same company and target audience. NULL for the earliest month in the data.",
+      "description": "The percentage change in monthly CTR compared to the previous month for the same company and audience. Null for the first month of data.",
       "tests": [],
       "tags": []
     },
     {
       "name": "audience_count",
       "type": "BIGINT",
-      "description": "The total number of distinct target audiences active within the specific company during that month.",
+      "description": "The total number of distinct target audiences active within the company during that specific month.",
       "tests": [
         "not_null",
         "dbt_utils.accepted_range"
@@ -155,7 +163,7 @@
     {
       "name": "audience_share_clicks",
       "type": "FLOAT",
-      "description": "The proportion of total clicks within the company for that month that came from this specific target audience. Calculated as SUM(Clicks for this Audience) / SUM(Total Clicks for Company).",
+      "description": "The proportion of total clicks within the company for that month that came from this specific target audience.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -164,7 +172,7 @@
     {
       "name": "response_rate",
       "type": "FLOAT",
-      "description": "The rate at which impressions turned into clicks for this company, audience, and month. Calculated as total_clicks / total_impressions.",
+      "description": "The rate at which impressions turned into clicks for this audience during the month (Total Clicks / Total Impressions). Same as monthly_ctr but calculated on the final aggregated values.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -173,8 +181,10 @@
     {
       "name": "efficiency_ratio",
       "type": "DOUBLE",
-      "description": "A measure of efficiency, calculated as total_revenue / total_spend for this company, audience, and month. Represents revenue generated per dollar spent (similar to ROAS).",
-      "tests": [],
+      "description": "A measure of efficiency calculated as Total Revenue / Total Spend for this audience during the month. Represents revenue generated per dollar spent.",
+      "tests": [
+        "dbt_utils.accepted_range"
+      ],
       "tags": []
     }
   ],

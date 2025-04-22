@@ -41,7 +41,9 @@ from app.channel_api_utils import (
 from app.campaign_api_utils import (
     get_company_goals,
     get_monthly_campaign_metrics,
-    get_campaign_duration_analysis
+    get_campaign_duration_analysis,
+    get_campaign_future_forecast,
+    get_campaign_clusters
 )
 
 # Configure logging
@@ -284,24 +286,23 @@ def audience_performance_matrix(company_id: str):
 @api_blueprint.route('/companies/<company_id>/audiences/clusters', methods=['GET'])
 def audience_clusters(company_id: str):
     """
-    Get audience clustering data.
+    Get high-performing audience clusters data, separated by ROI and conversion rate.
     
     Args:
         company_id: Company name to get audience clusters for
         
     Returns:
-        JSON: Audience clusters for the company
+        JSON: High-performing audience clusters for the company, separated by ROI and conversion rate
     """
     try:
         # Check for query parameters
-        min_roi = float(request.args.get('min_roi', 0))
-        min_conversion_rate = float(request.args.get('min_conversion_rate', 0))
+        limit = int(request.args.get('limit', 5))
         
-        results = get_audience_clusters(company_id, min_roi, min_conversion_rate)
+        results = get_audience_clusters(company_id, limit)
         return jsonify(results)
     except ValueError:
         return jsonify({
-            "error": "Invalid parameter values. min_roi and min_conversion_rate must be valid numbers."
+            "error": "Invalid parameter value. limit must be a valid integer."
         }), 400
     except Exception as e:
         logger.error(f"Error in audience_clusters endpoint: {str(e)}")
@@ -548,7 +549,7 @@ def campaign_duration_analysis(company_id: str):
     """
     try:
         # Check for query parameters
-        dimension = request.args.get('dimension', 'audience')
+        dimension = request.args.get('dimension', 'company')
         
         results = get_campaign_duration_analysis(company_id, dimension)
         return jsonify(results)
@@ -556,5 +557,53 @@ def campaign_duration_analysis(company_id: str):
         logger.error(f"Error in campaign_duration_analysis endpoint: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+@api_blueprint.route('/companies/<company_id>/campaign_clusters', methods=['GET'])
+def campaign_clusters(company_id: str):
+    """
+    Get high-performing campaign clusters data, separated by ROI and conversion rate.
+    
+    Args:
+        company_id: Company name to get campaign clusters for
+        
+    Query Parameters:
+        limit: Maximum number of clusters to return for each category, default is 5
+        
+    Returns:
+        JSON: High-performing campaign clusters for the company, separated by ROI and conversion rate
+    """
+    try:
+        # Check for query parameters
+        limit = int(request.args.get('limit', 5))
+        
+        results = get_campaign_clusters(company_id, limit)
+        return jsonify(results)
+    except ValueError:
+        return jsonify({
+            "error": "Invalid parameter value. limit must be a valid integer."
+        }), 400
+    except Exception as e:
+        logger.error(f"Error in campaign_clusters endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@api_blueprint.route('/companies/<company_id>/campaign_future_forecast', methods=['GET'])
+def campaign_future_forecast(company_id: str):
+    """
+    Get campaign future forecast data for a specific company.
+    
+    Args:
+        company_id: Company name to get campaign future forecast for
+        
+    Returns:
+        JSON: Campaign future forecast data for the company
+    """
+    try:
+        # Check for query parameters
+        metric = request.args.get('metric', 'revenue')
+        
+        results = get_campaign_future_forecast(company_id, metric)
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in campaign_future_forecast endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 

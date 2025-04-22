@@ -77,6 +77,18 @@ Follow these specific guidelines for dbt YAML generation:
    - Include materialization (table, view, etc.)
    - Add appropriate tags based on the model's purpose
 
+5. IMPORTANT COMPATIBILITY CONSTRAINTS:
+   - DO NOT use the 'allow_null' parameter in any test - it's not supported in this dbt version
+   - Instead, use 'where' conditions to filter out nulls when needed
+   - For accepted_values tests where nulls are valid, use a where clause like:
+     ```yaml
+     - accepted_values:
+         values: ['value1', 'value2']
+         where: "column_name IS NOT NULL"
+     ```
+   - For dbt_utils.accepted_range tests, do not include allow_null parameter
+   - Keep tests simple and compatible with dbt Core v1.0
+
 Your output should be structured according to the dbt schema.yml format.
 """
 

@@ -32,8 +32,8 @@ WITH company_monthly_metrics AS (
         SUM(Clicks) as total_clicks,
         SUM(Impressions) as total_impressions,
         CAST(SUM(Clicks) AS FLOAT) / NULLIF(SUM(Impressions), 0) as monthly_ctr,
-        SUM(Clicks * Acquisition_Cost) as total_spend,
-        SUM(Clicks * Acquisition_Cost * ROI) as total_revenue
+        SUM(Acquisition_Cost) as total_spend,
+        SUM(Acquisition_Cost * (1 + ROI)) as total_revenue
     FROM {{ ref('stg_campaigns') }}
     GROUP BY Company, month
     ORDER BY Company, month

@@ -118,7 +118,9 @@ def get_monthly_company_metrics(company_id: str, include_anomalies: bool = False
         avg_acquisition_cost as acquisition_cost,
         avg_ctr as ctr,
         total_spend as spend,
-        total_revenue as revenue
+        total_revenue as revenue,
+        total_clicks as clicks,
+        total_impressions as impressions
     FROM campaign_monthly_metrics
     WHERE Company = ?
     ORDER BY month
@@ -130,6 +132,15 @@ def get_monthly_company_metrics(company_id: str, include_anomalies: bool = False
         if not results:
             return {"metrics": {}}
             
+        # Calculate CAC (Customer Acquisition Cost) for each result
+        for result in results:
+            # CAC = Total Spend / (Clicks * Conversion Rate)
+            if result.get('clicks', 0) > 0 and result.get('conversion_rate', 0) > 0:
+                conversions = result['clicks'] * result['conversion_rate']
+                result['cac'] = result['spend'] / conversions if conversions > 0 else 0
+            else:
+                result['cac'] = 0
+                
         # Format the results into the expected structure
         metrics = {
             "conversion_rate": [],
@@ -137,7 +148,8 @@ def get_monthly_company_metrics(company_id: str, include_anomalies: bool = False
             "acquisition_cost": [],
             "ctr": [],
             "spend": [],
-            "revenue": []
+            "revenue": [],
+            "cac": []
         }
         
         for row in results:
@@ -157,6 +169,12 @@ def get_monthly_company_metrics(company_id: str, include_anomalies: bool = False
             metrics["acquisition_cost"].append({
                 "month": month_str,
                 "value": row["acquisition_cost"]
+            })
+            
+            # Add CAC to metrics
+            metrics["cac"].append({
+                "month": month_str,
+                "value": row["cac"]
             })
             
             metrics["ctr"].append({

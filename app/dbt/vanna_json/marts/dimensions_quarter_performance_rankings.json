@@ -1,11 +1,11 @@
 {
   "name": "dimensions_quarter_performance_rankings",
-  "description": "Ranks entities (companies, channels, segments, target audiences) within their respective dimensions based on key performance metrics (Conversion Rate, ROI, Acquisition Cost, CTR) for the most recent quarter.\nCalculates quarter-over-quarter (QoQ) changes and identifies performance trends compared to the previous quarter.\nProvides context by showing the rank relative to the total number of entities in the dimension.\nDesigned for performance analysis dashboards, focusing on relative rankings and QoQ trends.\nThe 'current quarter' is defined as the last 3 months of available data, and the 'previous quarter' is the 3 months preceding that.\n",
+  "description": "Ranks entities (companies, channels, segments, target audiences) within their respective dimensions based on key performance metrics (Conversion Rate, ROI, Acquisition Cost, CTR) for the most recent quarter.\nCalculates quarter-over-quarter (QoQ) changes and identifies performance trends (improved/declined/unchanged).\nThe 'current quarter' is defined as the last 3 months of available data in the source, and the 'previous quarter' is the 3 months preceding that.\nThis model unpivots the metrics for easier analysis and dashboard integration.\nBuilt from `stg_campaigns`.\n",
   "columns": [
     {
       "name": "dimension",
       "type": "VARCHAR",
-      "description": "The category being analyzed (e.g., 'company', 'channel', 'segment', 'audience').",
+      "description": "The dimension being analyzed (e.g., 'company', 'channel', 'segment', 'audience').",
       "tests": [
         "not_null",
         "accepted_values",
@@ -16,7 +16,7 @@
     {
       "name": "entity",
       "type": "VARCHAR",
-      "description": "The specific item within the dimension being ranked (e.g., a specific company name, channel name, segment name, or target audience).",
+      "description": "The specific entity within the dimension being ranked (e.g., a specific company name, channel name, segment name, or audience group).",
       "tests": [
         "not_null"
       ],
@@ -25,7 +25,7 @@
     {
       "name": "metric",
       "type": "VARCHAR",
-      "description": "The performance indicator being measured and ranked (e.g., 'conversion_rate', 'roi', 'acquisition_cost', 'ctr').",
+      "description": "The performance metric being measured (e.g., 'conversion_rate', 'roi', 'acquisition_cost', 'ctr').",
       "tests": [
         "not_null",
         "accepted_values"
@@ -35,19 +35,20 @@
     {
       "name": "metric_value",
       "type": "DOUBLE",
-      "description": "The calculated value of the specified metric for the entity in the current quarter.",
+      "description": "The calculated value of the metric for the entity in the current quarter.",
       "tests": [
-        "not_null"
+        "not_null",
+        "dbt_expectations.expect_column_values_to_be_non_negative"
       ],
       "tags": []
     },
     {
       "name": "metric_rank",
       "type": "BIGINT",
-      "description": "The rank of the entity within its dimension for the specified metric in the current quarter (1 = best performance). Lower rank is better for acquisition_cost, higher is better for others.",
+      "description": "The rank of the entity within its dimension for the specific metric in the current quarter. Lower rank is better for acquisition_cost, higher rank is better for others.",
       "tests": [
         "not_null",
-        "dbt_utils.accepted_range"
+        "dbt_expectations.expect_column_values_to_be_between"
       ],
       "tags": []
     },
@@ -57,38 +58,38 @@
       "description": "The total number of unique entities within the dimension for the current quarter.",
       "tests": [
         "not_null",
-        "dbt_utils.accepted_range"
+        "dbt_expectations.expect_column_values_to_be_between"
       ],
       "tags": []
     },
     {
       "name": "campaign_count",
       "type": "BIGINT",
-      "description": "The number of campaigns associated with this entity in the current quarter.",
+      "description": "The number of campaigns associated with this entity within the dimension during the current quarter.",
       "tests": [
         "not_null",
-        "dbt_utils.accepted_range"
+        "dbt_expectations.expect_column_values_to_be_between"
       ],
       "tags": []
     },
     {
       "name": "prev_metric_value",
       "type": "DOUBLE",
-      "description": "The calculated value of the specified metric for the entity in the previous quarter. NULL if no data exists for the previous quarter.",
+      "description": "The calculated value of the metric for the entity in the previous quarter. NULL if no data exists for the previous quarter.",
       "tests": [],
       "tags": []
     },
     {
       "name": "metric_qoq_change",
       "type": "DOUBLE",
-      "description": "The percentage change in the metric value from the previous quarter to the current quarter ((current - previous) / previous). NULL if previous data is missing or zero. Note: For Acquisition Cost, a positive change means cost increased (worse), negative means cost decreased (better).",
+      "description": "The percentage change in the metric value from the previous quarter to the current quarter. Calculated as (current - previous) / previous, except for acquisition cost where improvement is negative change. NULL if no previous data.",
       "tests": [],
       "tags": []
     },
     {
       "name": "trend",
       "type": "VARCHAR",
-      "description": "Categorical assessment of the performance change based on QoQ change ('improved', 'declined', 'unchanged', 'no_previous_data'). 'Improved' means better performance (higher ROI/CTR/Conversion Rate, lower Acquisition Cost).",
+      "description": "Indicates the performance trend based on the QoQ change ('improved', 'declined', 'unchanged', 'no_previous_data'). Note: 'improved' for acquisition_cost means the value decreased.",
       "tests": [
         "not_null",
         "accepted_values"
@@ -98,40 +99,40 @@
     {
       "name": "current_window_start_month",
       "type": "BIGINT",
-      "description": "The starting month number (1-12) of the current analysis period (last 3 months).",
+      "description": "The starting month number (1-12) of the current 3-month analysis window.",
       "tests": [
         "not_null",
-        "accepted_values"
+        "dbt_expectations.expect_column_values_to_be_between"
       ],
       "tags": []
     },
     {
       "name": "current_window_end_month",
       "type": "BIGINT",
-      "description": "The ending month number (1-12) of the current analysis period (last 3 months).",
+      "description": "The ending month number (1-12) of the current 3-month analysis window.",
       "tests": [
         "not_null",
-        "accepted_values"
+        "dbt_expectations.expect_column_values_to_be_between"
       ],
       "tags": []
     },
     {
       "name": "previous_window_start_month",
       "type": "BIGINT",
-      "description": "The starting month number (1-12) of the previous analysis period (3 months prior to current).",
+      "description": "The starting month number (1-12) of the previous 3-month analysis window used for comparison.",
       "tests": [
         "not_null",
-        "accepted_values"
+        "dbt_expectations.expect_column_values_to_be_between"
       ],
       "tags": []
     },
     {
       "name": "previous_window_end_month",
       "type": "BIGINT",
-      "description": "The ending month number (1-12) of the previous analysis period (3 months prior to current).",
+      "description": "The ending month number (1-12) of the previous 3-month analysis window used for comparison.",
       "tests": [
         "not_null",
-        "accepted_values"
+        "dbt_expectations.expect_column_values_to_be_between"
       ],
       "tags": []
     }
