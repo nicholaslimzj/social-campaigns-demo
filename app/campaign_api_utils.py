@@ -719,3 +719,143 @@ def get_campaign_future_forecast(company_id: str, metric: str = 'revenue') -> Di
                 "error": str(e)
             }
         }
+
+
+def get_campaign_performance_rankings(company_id: str, limit: int = 5) -> Dict[str, Any]:
+    """
+    Get campaign performance rankings for a specific company, including top and bottom
+    performers for ROI, conversion rate, revenue, and CPA (Cost Per Acquisition).
+    
+    Args:
+        company_id: Company ID to get campaign performance rankings for
+        limit: Maximum number of campaigns to return for each category (default: 5)
+        
+    Returns:
+        Dict with top_campaigns and bottom_campaigns, each containing campaigns sorted by
+        different metrics (roi, conversion_rate, revenue, cpa)
+    """
+    try:
+        # Query to get top ROI campaigns
+        top_roi_query = """
+        SELECT * 
+        FROM campaign_month_performance_rankings
+        WHERE Company = ?
+        AND is_top_roi_performer = TRUE
+        ORDER BY roi_rank
+        LIMIT ?
+        """
+        
+        # Query to get bottom ROI campaigns
+        bottom_roi_query = """
+        SELECT * 
+        FROM campaign_month_performance_rankings
+        WHERE Company = ?
+        AND is_bottom_roi_performer = TRUE
+        ORDER BY roi_rank_asc
+        LIMIT ?
+        """
+        
+        # Query to get top conversion rate campaigns
+        top_conversion_query = """
+        SELECT * 
+        FROM campaign_month_performance_rankings
+        WHERE Company = ?
+        AND is_top_conversion_performer = TRUE
+        ORDER BY conversion_rank
+        LIMIT ?
+        """
+        
+        # Query to get bottom conversion rate campaigns
+        bottom_conversion_query = """
+        SELECT * 
+        FROM campaign_month_performance_rankings
+        WHERE Company = ?
+        AND is_bottom_conversion_performer = TRUE
+        ORDER BY conversion_rank_asc
+        LIMIT ?
+        """
+        
+        # Query to get top revenue campaigns
+        top_revenue_query = """
+        SELECT * 
+        FROM campaign_month_performance_rankings
+        WHERE Company = ?
+        AND is_top_revenue_performer = TRUE
+        ORDER BY revenue_rank
+        LIMIT ?
+        """
+        
+        # Query to get bottom revenue campaigns
+        bottom_revenue_query = """
+        SELECT * 
+        FROM campaign_month_performance_rankings
+        WHERE Company = ?
+        AND is_bottom_revenue_performer = TRUE
+        ORDER BY revenue_rank_asc
+        LIMIT ?
+        """
+        
+        # Query to get top CPA campaigns (lower is better)
+        top_cpa_query = """
+        SELECT * 
+        FROM campaign_month_performance_rankings
+        WHERE Company = ?
+        AND is_top_cpa_performer = TRUE
+        ORDER BY cpa_rank
+        LIMIT ?
+        """
+        
+        # Query to get bottom CPA campaigns (higher is worse)
+        bottom_cpa_query = """
+        SELECT * 
+        FROM campaign_month_performance_rankings
+        WHERE Company = ?
+        AND is_bottom_cpa_performer = TRUE
+        ORDER BY cpa_rank_asc
+        LIMIT ?
+        """
+        
+        # Execute all queries
+        top_roi = execute_query(top_roi_query, [company_id, limit])
+        bottom_roi = execute_query(bottom_roi_query, [company_id, limit])
+        top_conversion = execute_query(top_conversion_query, [company_id, limit])
+        bottom_conversion = execute_query(bottom_conversion_query, [company_id, limit])
+        top_revenue = execute_query(top_revenue_query, [company_id, limit])
+        bottom_revenue = execute_query(bottom_revenue_query, [company_id, limit])
+        top_cpa = execute_query(top_cpa_query, [company_id, limit])
+        bottom_cpa = execute_query(bottom_cpa_query, [company_id, limit])
+        
+        # Format the response
+        return {
+            "company": company_id,
+            "top_campaigns": {
+                "roi": top_roi,
+                "conversion_rate": top_conversion,
+                "revenue": top_revenue,
+                "cpa": top_cpa
+            },
+            "bottom_campaigns": {
+                "roi": bottom_roi,
+                "conversion_rate": bottom_conversion,
+                "revenue": bottom_revenue,
+                "cpa": bottom_cpa
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting campaign performance rankings: {str(e)}")
+        return {
+            "company": company_id,
+            "top_campaigns": {
+                "roi": [],
+                "conversion_rate": [],
+                "revenue": [],
+                "cpa": []
+            },
+            "bottom_campaigns": {
+                "roi": [],
+                "conversion_rate": [],
+                "revenue": [],
+                "cpa": []
+            },
+            "error": str(e)
+        }

@@ -326,17 +326,12 @@ def generate_dbt_metadata(model_type=None, model_name=None, skip_existing=False,
         logger.error(f"Error generating metadata: {e}")
         return False
 
-def generate_insights(company_name=None, insight_type=None, force_refresh=False):
-    """
-    Generate AI-powered insights for social media advertising data.
+def generate_insights(company_name=None, force_refresh=False):
+    """Generate AI-powered insights for social media data.
     
     Args:
-        company_name: Name of the company to generate insights for
-        insight_type: Type of insight to generate ('company', 'segment', 'channel', 'campaign')
-        force_refresh: Whether to force refresh the insights cache
-        
-    Returns:
-        bool: True if successful, False otherwise
+        company_name: The name of the company to generate insights for (or 'all' for all companies)
+        force_refresh: Whether to force a refresh of the insight
     """
     try:
         # Check if required environment variables are set
@@ -348,9 +343,8 @@ def generate_insights(company_name=None, insight_type=None, force_refresh=False)
         # Import the insights generator
         from app.scripts.insights_generator import generate_insight_cli
         
-        # Generate the insight (the function now handles company resolution and validation)
-        result = generate_insight_cli(company_name, insight_type, force_refresh)
-        return result
+        # Call the CLI function (passing None for insight_type as it's no longer needed)
+        return generate_insight_cli(company_name, None, force_refresh)
         
     except ImportError as e:
         logger.error(f"Error importing insights generator: {e}")
@@ -419,9 +413,8 @@ def main():
             
             # Process remaining arguments
             if args:
-                company_name = args[0]
-                if len(args) > 1:
-                    insight_type = args[1]
+                company_name = args[0]  # First arg is company name or 'all'
+                # No longer need insight_type parameter
     
     # Execute the requested command
     if command == "check":
@@ -448,7 +441,7 @@ def main():
     elif command == "metadata":
         generate_dbt_metadata(model_type=model_type, model_name=model_name, skip_existing=skip_existing, vanna_json=vanna_json)
     elif command == "insights":
-        generate_insights(company_name=company_name, insight_type=insight_type, force_refresh=force_refresh)
+        generate_insights(company_name=company_name, force_refresh=force_refresh)
     else:
         logger.error(f"Unknown command: {command}")
         logger.info("Available commands: check, process, dbt, dashboard, serve, vanna, metadata, insights")

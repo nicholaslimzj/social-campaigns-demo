@@ -7,6 +7,7 @@ implementing the first 7 APIs from the API documentation.
 
 import logging
 import os
+from datetime import datetime
 from flask import Flask, Blueprint, jsonify, request
 from flask_cors import CORS
 from typing import Dict, List, Any, Optional, Union
@@ -42,9 +43,12 @@ from app.campaign_api_utils import (
     get_company_goals,
     get_monthly_campaign_metrics,
     get_campaign_duration_analysis,
+    get_campaign_clusters,
     get_campaign_future_forecast,
-    get_campaign_clusters
+    get_campaign_performance_rankings
 )
+
+from app.scripts.insights_generator import get_insights_connection
 
 # Configure logging
 logging.basicConfig(
@@ -585,6 +589,35 @@ def campaign_clusters(company_id: str):
         logger.error(f"Error in campaign_clusters endpoint: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+@api_blueprint.route('/companies/<company_id>/campaign_performance_rankings', methods=['GET'])
+def campaign_performance_rankings(company_id: str):
+    """
+    Get campaign performance rankings for a specific company, including top and bottom
+    performers for ROI, conversion rate, revenue, and CPA (Cost Per Acquisition).
+    
+    Args:
+        company_id: Company name to get campaign performance rankings for
+        
+    Query Parameters:
+        limit: Maximum number of campaigns to return for each category, default is 5
+        
+    Returns:
+        JSON: Top and bottom performing campaigns for the company, categorized by metric
+    """
+    try:
+        # Check for query parameters
+        limit = int(request.args.get('limit', 5))
+        
+        results = get_campaign_performance_rankings(company_id, limit)
+        return jsonify(results)
+    except ValueError:
+        return jsonify({
+            "error": "Invalid parameter value. limit must be a valid integer."
+        }), 400
+    except Exception as e:
+        logger.error(f"Error in campaign_performance_rankings endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 @api_blueprint.route('/companies/<company_id>/campaign_future_forecast', methods=['GET'])
 def campaign_future_forecast(company_id: str):
     """
@@ -604,6 +637,69 @@ def campaign_future_forecast(company_id: str):
         return jsonify(results)
     except Exception as e:
         logger.error(f"Error in campaign_future_forecast endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@api_blueprint.route('/companies/<company_id>/insights', methods=['GET'])
+def company_insights(company_id: str):
+    """
+    Get the latest insights for a company.
+    
+    Args:
+        company_id: The company ID
+        
+    Returns:
+        JSON response with the insights
+    """
+    try:
+        # Connect to the insights database
+        conn = get_insights_connection()
+        
+        # Query for the latest insight
+        result = conn.execute(
+            """SELECT insight_text, generated_at 
+            FROM insights_cache 
+            WHERE company_name = ?
+            ORDER BY generated_at DESC LIMIT 1""", 
+            [company_id]
+        ).fetchone()
+        
+        conn.close()
+        
+        if not result:
+            # If no insight exists in the database, check for a file
+            file_path = f"/app/static/insights/{company_id.replace(' ', '_').lower()}_insights.html"
+            if os.path.exists(file_path):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    insight_text = f.read()
+                    return jsonify({
+                        "company": company_id,
+                        "insight": insight_text,
+                        "generated_at": datetime.now().isoformat(),
+                        "source": "file"
+                    })
+            else:
+                return jsonify({
+                    "error": f"No insights found for company: {company_id}"
+                }), 404
+        
+        # Return the insight
+        insight_text, generated_at = result
+        
+        # Remove backticks if they exist (they're used for database safety)
+        if insight_text.startswith('```html') and insight_text.endswith('```'):
+            insight_text = insight_text[7:-3]  # Remove ```html at the start and ``` at the end
+        elif insight_text.startswith('`') and insight_text.endswith('`'):
+            insight_text = insight_text[1:-1]  # Remove single backticks
+        
+        return jsonify({
+            "company": company_id,
+            "insight": insight_text,
+            "generated_at": generated_at.isoformat() if isinstance(generated_at, datetime) else generated_at,
+            "source": "database"
+        })
+    except Exception as e:
+        logger.error(f"Error getting insights for {company_id}: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 

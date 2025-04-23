@@ -3,7 +3,7 @@ pandas~=2.2.0
 pyarrow~=19.0.0
 duckdb~=1.2.0
 fastparquet==2024.11.0
-numpy~=2.2.0
+numpy>=1.22.4
 
 # Visualization libraries
 matplotlib~=3.10.0
@@ -29,6 +29,10 @@ dbt-duckdb~=1.9.0
 # Vanna.ai for natural language to SQL
 vanna[chromadb,gemini,duckdb]~=0.7.0
 vertexai~=1.71.0
+
+# LangChain for insights generation
+langchain~=0.1.0
+langchain-google-genai>=0.0.3
 
 # API server
 flask~=3.0.0
