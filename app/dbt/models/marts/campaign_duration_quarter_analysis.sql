@@ -18,8 +18,6 @@ Key Features:
 Dashboard Usage:
 - Campaign Duration Impact visualization
 - Campaign Length Optimization recommendations
-
-Note: This model is part of the industry-standard models that provide cross-company insights.
 */
 
 WITH 

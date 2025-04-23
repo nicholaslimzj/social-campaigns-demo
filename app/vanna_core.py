@@ -200,21 +200,34 @@ class MetaVannaCore:
         except Exception as e:
             logger.warning(f"Could not train on information schema: {e}")
 
-        # 2. Train on each Vanna JSON file individually
-        trained_count = 0
-        for root, dirs, files in os.walk(vanna_json_root):
-            for file in files:
-                if file.endswith('.json'):
-                    json_path = os.path.join(root, file)
-                    try:
-                        with open(json_path, 'r') as f:
-                            doc_string = f.read()
-                        self.vn.train(documentation=doc_string)
-                        logger.info(f"Trained on Vanna JSON documentation: {json_path}")
-                        trained_count += 1
-                    except Exception as e:
-                        logger.warning(f"Could not train on Vanna JSON file {json_path}: {e}")
-        logger.info(f"Vanna training completed ({trained_count} JSON files trained)")
+        # 2. Train on each Vanna JSON file individually, using only table name and description
+        # trained_count = 0
+        # for root, dirs, files in os.walk(vanna_json_root):
+        #     for file in files:
+        #         if file.endswith('.json'):
+        #             json_path = os.path.join(root, file)
+        #             try:
+        #                 import json
+        #                 with open(json_path, 'r') as f:
+        #                     json_data = json.load(f)
+                            
+        #                 # Extract only the table name and description
+        #                 if 'name' in json_data and 'description' in json_data:
+        #                     table_name = json_data['name']
+        #                     description = json_data['description']
+                            
+        #                     # Create a simplified training string
+        #                     simplified_doc = f"The table {table_name} has this description: {description}"
+                            
+        #                     # Train Vanna with just the simplified information
+        #                     self.vn.train(documentation=simplified_doc)
+        #                     logger.info(f"Trained on simplified Vanna JSON documentation: {json_path}")
+        #                     trained_count += 1
+        #                 else:
+        #                     logger.warning(f"JSON file {json_path} missing required name or description fields")
+        #             except Exception as e:
+        #                 logger.warning(f"Could not train on Vanna JSON file {json_path}: {e}")
+        # logger.info(f"Vanna training completed ({trained_count} JSON files trained)")
     
     def ask(self, question: str) -> Dict[str, Any]:
         """
@@ -241,10 +254,18 @@ class MetaVannaCore:
             results = self.vn.run_sql(sql)
             logger.info(f"Query executed successfully, returned {len(results)} rows")
             
+            # Convert DataFrame to a JSON-serializable format
+            if hasattr(results, 'to_dict'):
+                # It's a pandas DataFrame, convert to records
+                serializable_results = results.to_dict(orient='records')
+            else:
+                # It's already a list or other serializable type
+                serializable_results = results
+            
             return {
                 "question": question,
                 "sql": sql,
-                "results": results
+                "results": serializable_results
             }
         except Exception as e:
             logger.error(f"Error executing SQL: {e}")

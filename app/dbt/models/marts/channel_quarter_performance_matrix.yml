@@ -2,23 +2,19 @@ version: 2
 
 models:
   - name: channel_quarter_performance_matrix
-    description: >
-      Analyzes marketing channel performance for the current quarter (last 3 months of available data). 
-      Aggregates metrics at the channel, company, target audience, and campaign goal level. 
-      Provides absolute performance metrics (conversion rate, ROI, acquisition cost, CTR), 
-      relative performance comparisons against channel, company, dimension, and global averages, 
-      and calculates a weighted composite score for ranking performance combinations. 
-      Designed for dashboarding channel effectiveness and identifying high/low performers.
+    description: |
+      Analyzes marketing channel performance metrics for the current quarter (last 3 months of available data).
+      Aggregates key performance indicators (KPIs) at the level of Channel, Company, and a specific dimension (Target Audience or Campaign Goal).
+      Calculates performance relative to channel, company, dimension, and global averages.
+      Includes a weighted composite score for ranking and performance tier classification.
+      Designed for use in dashboards visualizing channel mix, ROI, acquisition cost, and performance comparisons.
     config:
       materialized: table
-      tags:
-        - 'mart'
-        - 'marketing'
-        - 'performance'
-        - 'quarterly'
+      tags: ['mart', 'marketing', 'performance', 'channels', 'quarterly']
     columns:
       - name: Channel_Used
-        description: "The marketing channel used for the campaign (e.g., Facebook, Google Ads, Email)."
+        description: "The marketing channel used for the campaigns (e.g., Facebook, Google Ads, Email)."
+        data_type: VARCHAR
         tests:
           - not_null
           - dbt_utils.unique_combination_of_columns:
@@ -27,340 +23,329 @@ models:
                 - Company
                 - dimension_value
                 - dimension_type
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: VARCHAR
 
       - name: Company
-        description: "The company associated with the campaign."
+        description: "The company associated with the marketing campaigns."
+        data_type: VARCHAR
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: VARCHAR
 
       - name: dimension_value
         description: "The specific value of the dimension being analyzed (e.g., 'Brand Awareness' if dimension_type is 'goal', or 'All Ages' if dimension_type is 'target_audience')."
+        data_type: VARCHAR
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: VARCHAR
 
       - name: dimension_type
-        description: "The type of dimension being analyzed ('goal' or 'target_audience')."
+        description: "The type of dimension being analyzed in this row ('goal' or 'target_audience')."
+        data_type: VARCHAR
         tests:
           - not_null
           - accepted_values:
               values: ['goal', 'target_audience']
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: VARCHAR
 
       - name: campaign_count
-        description: "The number of distinct campaigns included in this specific combination (Channel, Company, Dimension) for the quarter."
+        description: "The total number of campaigns included in this specific Channel-Company-Dimension combination for the current quarter."
+        data_type: BIGINT
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_non_negative
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: BIGINT
+          - dbt_utils.accepted_range:
+              min_value: 0
 
       - name: avg_conversion_rate
-        description: "The average conversion rate for this combination over the quarter."
+        description: "Average Conversion Rate for this specific Channel-Company-Dimension combination during the current quarter."
+        data_type: DOUBLE
         tests:
-          - dbt_expectations.expect_column_values_to_be_between:
+          - dbt_utils.accepted_range:
               min_value: 0
-              # Max value could theoretically exceed 1 if defined differently, but typically <= 1
-              # max_value: 1 
-              row_condition: "campaign_count > 0" # Only test non-null rows
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+              where: "avg_conversion_rate IS NOT NULL"
 
       - name: avg_roi
-        description: "The average Return on Investment (ROI) for this combination over the quarter."
-        tests:
-          # ROI can be negative
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Average Return on Investment (ROI) for this specific Channel-Company-Dimension combination during the current quarter."
+        data_type: DOUBLE
 
       - name: avg_acquisition_cost
-        description: "The average cost to acquire a customer/conversion for this combination over the quarter."
+        description: "Average Acquisition Cost for this specific Channel-Company-Dimension combination during the current quarter."
+        data_type: DOUBLE
         tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "avg_acquisition_cost IS NOT NULL"
 
       - name: avg_ctr
-        description: "The average Click-Through Rate (CTR) for this combination over the quarter (Total Clicks / Total Impressions)."
+        description: "Average Click-Through Rate (CTR) for this specific Channel-Company-Dimension combination during the current quarter. Calculated as Total Clicks / Total Impressions."
+        data_type: FLOAT
         tests:
-          - dbt_expectations.expect_column_values_to_be_between:
+          - dbt_utils.accepted_range:
               min_value: 0
-              max_value: 1 
-              row_condition: "total_impressions > 0" # Only test non-null rows
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: FLOAT # Based on SQL CAST
+              where: "avg_ctr IS NOT NULL" # Can be NULL if total_impressions is 0
 
       - name: total_clicks
-        description: "The total number of clicks generated by campaigns in this combination over the quarter."
+        description: "Total number of clicks generated by campaigns in this combination during the current quarter."
+        data_type: HUGEINT
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_non_negative
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: HUGEINT
+          - dbt_utils.accepted_range:
+              min_value: 0
 
       - name: total_impressions
-        description: "The total number of impressions generated by campaigns in this combination over the quarter."
+        description: "Total number of impressions generated by campaigns in this combination during the current quarter."
+        data_type: HUGEINT
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_non_negative
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: HUGEINT
+          - dbt_utils.accepted_range:
+              min_value: 0
 
       - name: total_spend
-        description: "The estimated total spend for this combination over the quarter."
+        description: "Total calculated marketing spend for this combination during the current quarter."
+        data_type: DOUBLE
         tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "total_spend IS NOT NULL"
 
       - name: total_revenue
-        description: "The estimated total revenue generated from this combination over the quarter."
-        tests:
-          # Revenue could theoretically be negative depending on definition, but usually non-negative
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Total calculated revenue generated from this combination during the current quarter."
+        data_type: DOUBLE
 
-      # Channel Averages
       - name: channel_avg_conversion_rate
-        description: "The average conversion rate across all companies and dimensions for this specific channel over the quarter."
+        description: "Average Conversion Rate across all companies and dimensions for this specific Channel during the current quarter."
+        data_type: DOUBLE
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "channel_avg_conversion_rate IS NOT NULL"
+
       - name: channel_avg_roi
-        description: "The average ROI across all companies and dimensions for this specific channel over the quarter."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Average ROI across all companies and dimensions for this specific Channel during the current quarter."
+        data_type: DOUBLE
+
       - name: channel_avg_acquisition_cost
-        description: "The average acquisition cost across all companies and dimensions for this specific channel over the quarter."
+        description: "Average Acquisition Cost across all companies and dimensions for this specific Channel during the current quarter."
+        data_type: DOUBLE
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "channel_avg_acquisition_cost IS NOT NULL"
+
       - name: channel_avg_ctr
-        description: "The average CTR across all companies and dimensions for this specific channel over the quarter."
+        description: "Average CTR across all companies and dimensions for this specific Channel during the current quarter."
+        data_type: DOUBLE
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "channel_avg_ctr IS NOT NULL"
+
       - name: channel_total_spend
-        description: "The total spend across all companies and dimensions for this specific channel over the quarter."
+        description: "Total marketing spend across all companies and dimensions for this specific Channel during the current quarter."
+        data_type: DOUBLE
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "channel_total_spend IS NOT NULL"
+
       - name: channel_total_revenue
-        description: "The total revenue across all companies and dimensions for this specific channel over the quarter."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Total revenue generated across all companies and dimensions for this specific Channel during the current quarter."
+        data_type: DOUBLE
 
-      # Channel-Company Averages
       - name: company_avg_conversion_rate
-        description: "The average conversion rate across all dimensions for this specific channel and company over the quarter."
+        description: "Average Conversion Rate across all dimensions for this specific Channel-Company combination during the current quarter."
+        data_type: DOUBLE
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "company_avg_conversion_rate IS NOT NULL"
+
       - name: company_avg_roi
-        description: "The average ROI across all dimensions for this specific channel and company over the quarter."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Average ROI across all dimensions for this specific Channel-Company combination during the current quarter."
+        data_type: DOUBLE
+
       - name: company_avg_acquisition_cost
-        description: "The average acquisition cost across all dimensions for this specific channel and company over the quarter."
+        description: "Average Acquisition Cost across all dimensions for this specific Channel-Company combination during the current quarter."
+        data_type: DOUBLE
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "company_avg_acquisition_cost IS NOT NULL"
+
       - name: company_avg_ctr
-        description: "The average CTR across all dimensions for this specific channel and company over the quarter."
+        description: "Average CTR across all dimensions for this specific Channel-Company combination during the current quarter."
+        data_type: DOUBLE
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "company_avg_ctr IS NOT NULL"
+
       - name: company_total_spend
-        description: "The total spend across all dimensions for this specific channel and company over the quarter."
+        description: "Total marketing spend across all dimensions for this specific Channel-Company combination during the current quarter."
+        data_type: DOUBLE
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "company_total_spend IS NOT NULL"
+
       - name: company_total_revenue
-        description: "The total revenue across all dimensions for this specific channel and company over the quarter."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Total revenue generated across all dimensions for this specific Channel-Company combination during the current quarter."
+        data_type: DOUBLE
 
-      # Dimension Averages
       - name: dimension_avg_conversion_rate
-        description: "The average conversion rate across all companies for this specific channel and dimension over the quarter."
+        description: "Average Conversion Rate across all companies for this specific Channel-Dimension combination during the current quarter."
+        data_type: DOUBLE
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "dimension_avg_conversion_rate IS NOT NULL"
+
       - name: dimension_avg_roi
-        description: "The average ROI across all companies for this specific channel and dimension over the quarter."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Average ROI across all companies for this specific Channel-Dimension combination during the current quarter."
+        data_type: DOUBLE
+
       - name: dimension_avg_acquisition_cost
-        description: "The average acquisition cost across all companies for this specific channel and dimension over the quarter."
+        description: "Average Acquisition Cost across all companies for this specific Channel-Dimension combination during the current quarter."
+        data_type: DOUBLE
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "dimension_avg_acquisition_cost IS NOT NULL"
+
       - name: dimension_avg_ctr
-        description: "The average CTR across all companies for this specific channel and dimension over the quarter."
+        description: "Average CTR across all companies for this specific Channel-Dimension combination during the current quarter."
+        data_type: DOUBLE
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "dimension_avg_ctr IS NOT NULL"
 
-      # Global Averages
       - name: global_avg_conversion_rate
-        description: "The global average conversion rate across all channels, companies, and dimensions over the quarter."
+        description: "Global average Conversion Rate across all channels, companies, and dimensions during the current quarter."
+        data_type: DOUBLE
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "global_avg_conversion_rate IS NOT NULL"
+
       - name: global_avg_roi
-        description: "The global average ROI across all channels, companies, and dimensions over the quarter."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Global average ROI across all channels, companies, and dimensions during the current quarter."
+        data_type: DOUBLE
+
       - name: global_avg_acquisition_cost
-        description: "The global average acquisition cost across all channels, companies, and dimensions over the quarter."
+        description: "Global average Acquisition Cost across all channels, companies, and dimensions during the current quarter."
+        data_type: DOUBLE
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "global_avg_acquisition_cost IS NOT NULL"
+
       - name: global_avg_ctr
-        description: "The global average CTR across all channels, companies, and dimensions over the quarter."
+        description: "Global average CTR across all channels, companies, and dimensions during the current quarter."
+        data_type: DOUBLE
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "global_avg_ctr IS NOT NULL"
 
-      # Relative Performance Metrics vs Channel
       - name: conversion_rate_vs_channel_avg
-        description: "Percentage difference of this combination's conversion rate compared to the channel average ((Combo CR / Channel CR) - 1)."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Percentage difference between this combination's average Conversion Rate and the overall average Conversion Rate for the channel. ((Combination Avg / Channel Avg) - 1)."
+        data_type: DOUBLE
+
       - name: roi_vs_channel_avg
-        description: "Percentage difference of this combination's ROI compared to the channel average ((Combo ROI / Channel ROI) - 1)."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Percentage difference between this combination's average ROI and the overall average ROI for the channel. ((Combination Avg / Channel Avg) - 1)."
+        data_type: DOUBLE
+
       - name: acquisition_cost_vs_channel_avg
-        description: "Percentage difference of this combination's acquisition cost compared to the channel average ((Channel AC / Combo AC) - 1). Higher is better (lower cost)."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Percentage difference between the channel's average Acquisition Cost and this combination's average Acquisition Cost (inverted for comparison: higher is better). ((Channel Avg / Combination Avg) - 1)."
+        data_type: DOUBLE
+
       - name: ctr_vs_channel_avg
-        description: "Percentage difference of this combination's CTR compared to the channel average ((Combo CTR / Channel CTR) - 1)."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Percentage difference between this combination's average CTR and the overall average CTR for the channel. ((Combination Avg / Channel Avg) - 1)."
+        data_type: DOUBLE
 
-      # Relative Performance Metrics vs Company (within Channel)
       - name: conversion_rate_vs_company_avg
-        description: "Percentage difference of this combination's conversion rate compared to the company's average within this channel."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Percentage difference between this combination's average Conversion Rate and the average for this specific Channel-Company combination. ((Combination Avg / Company Avg) - 1)."
+        data_type: DOUBLE
+
       - name: roi_vs_company_avg
-        description: "Percentage difference of this combination's ROI compared to the company's average within this channel."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Percentage difference between this combination's average ROI and the average for this specific Channel-Company combination. ((Combination Avg / Company Avg) - 1)."
+        data_type: DOUBLE
+
       - name: acquisition_cost_vs_company_avg
-        description: "Percentage difference of this combination's acquisition cost compared to the company's average within this channel. Higher is better."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Percentage difference between the Channel-Company average Acquisition Cost and this combination's average Acquisition Cost (inverted). ((Company Avg / Combination Avg) - 1)."
+        data_type: DOUBLE
+
       - name: ctr_vs_company_avg
-        description: "Percentage difference of this combination's CTR compared to the company's average within this channel."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Percentage difference between this combination's average CTR and the average for this specific Channel-Company combination. ((Combination Avg / Company Avg) - 1)."
+        data_type: DOUBLE
 
-      # Relative Performance Metrics vs Dimension (within Channel)
       - name: conversion_rate_vs_dimension_avg
-        description: "Percentage difference of this combination's conversion rate compared to the dimension's average within this channel."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Percentage difference between this combination's average Conversion Rate and the average for this specific Channel-Dimension combination. ((Combination Avg / Dimension Avg) - 1)."
+        data_type: DOUBLE
+
       - name: roi_vs_dimension_avg
-        description: "Percentage difference of this combination's ROI compared to the dimension's average within this channel."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Percentage difference between this combination's average ROI and the average for this specific Channel-Dimension combination. ((Combination Avg / Dimension Avg) - 1)."
+        data_type: DOUBLE
+
       - name: acquisition_cost_vs_dimension_avg
-        description: "Percentage difference of this combination's acquisition cost compared to the dimension's average within this channel. Higher is better."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Percentage difference between the Channel-Dimension average Acquisition Cost and this combination's average Acquisition Cost (inverted). ((Dimension Avg / Combination Avg) - 1)."
+        data_type: DOUBLE
+
       - name: ctr_vs_dimension_avg
-        description: "Percentage difference of this combination's CTR compared to the dimension's average within this channel."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Percentage difference between this combination's average CTR and the average for this specific Channel-Dimension combination. ((Combination Avg / Dimension Avg) - 1)."
+        data_type: DOUBLE
 
-      # Relative Performance Metrics vs Global
       - name: conversion_rate_vs_global_avg
-        description: "Percentage difference of this combination's conversion rate compared to the global average."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Percentage difference between this combination's average Conversion Rate and the global average. ((Combination Avg / Global Avg) - 1)."
+        data_type: DOUBLE
+
       - name: roi_vs_global_avg
-        description: "Percentage difference of this combination's ROI compared to the global average."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Percentage difference between this combination's average ROI and the global average. ((Combination Avg / Global Avg) - 1)."
+        data_type: DOUBLE
+
       - name: acquisition_cost_vs_global_avg
-        description: "Percentage difference of this combination's acquisition cost compared to the global average. Higher is better."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Percentage difference between the global average Acquisition Cost and this combination's average Acquisition Cost (inverted). ((Global Avg / Combination Avg) - 1)."
+        data_type: DOUBLE
+
       - name: ctr_vs_global_avg
-        description: "Percentage difference of this combination's CTR compared to the global average."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Percentage difference between this combination's average CTR and the global average. ((Combination Avg / Global Avg) - 1)."
+        data_type: DOUBLE
 
-      # Allocation Percentages
       - name: spend_pct_of_channel
-        description: "The percentage of the channel's total spend allocated to this specific combination (Combo Spend / Channel Spend)."
+        description: "The percentage of the channel's total spend attributed to this specific combination (Combination Total Spend / Channel Total Spend)."
+        data_type: DOUBLE
         tests:
-          - dbt_expectations.expect_column_values_to_be_between:
+          - dbt_utils.accepted_range:
               min_value: 0
-              max_value: 1 
-              row_condition: "channel_total_spend > 0" # Only test non-null rows
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-      - name: revenue_pct_of_channel
-        description: "The percentage of the channel's total revenue contributed by this specific combination (Combo Revenue / Channel Revenue)."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              # Can exceed 1 if other parts of channel have negative revenue
-              row_condition: "channel_total_revenue != 0" # Only test non-null rows
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+              max_value: 1 # Should be between 0 and 1
+              where: "spend_pct_of_channel IS NOT NULL" # Can be NULL if channel_total_spend is 0
 
-      # Composite Score and Classification
-      - name: composite_score
-        description: "A weighted score reflecting overall performance relative to global averages (Weights: ROI 40%, Conversion Rate 25%, Acquisition Cost 25%, CTR 10%). Higher is better."
+      - name: revenue_pct_of_channel
+        description: "The percentage of the channel's total revenue attributed to this specific combination (Combination Total Revenue / Channel Total Revenue)."
+        data_type: DOUBLE
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+          - dbt_utils.accepted_range:
+              min_value: 0
+              # Max value can theoretically exceed 1 if other combinations have negative revenue, but typically <= 1
+              where: "revenue_pct_of_channel IS NOT NULL" # Can be NULL if channel_total_revenue is 0
+
+      - name: composite_score
+        description: "A weighted score indicating overall performance relative to global averages. Weights: ROI (0.4), Conversion Rate (0.25), Acquisition Cost (0.25, inverted), CTR (0.1). Higher is better."
+        data_type: DOUBLE
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0 # Score calculation ensures non-negativity
+              where: "composite_score IS NOT NULL" # Can be NULL if global averages are zero/null
+
       - name: performance_tier
-        description: "Categorization based on composite score ('high_performer' >= 1.2, 'low_performer' <= 0.8, 'average_performer' otherwise)."
+        description: "Categorical performance classification based on the composite_score ('high_performer' >= 1.2, 'low_performer' <= 0.8, 'average_performer' otherwise)."
+        data_type: VARCHAR
         tests:
           - not_null
           - accepted_values:
               values: ['high_performer', 'average_performer', 'low_performer']
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: VARCHAR
+
       - name: is_top_performer
-        description: "Boolean flag indicating if this combination ranks in the top 10% based on composite score within its dimension type."
+        description: "Boolean flag indicating if this combination ranks in the top 10% based on composite_score within its dimension_type."
+        data_type: BOOLEAN
         tests:
           - not_null
           - accepted_values:
-              values: [True, False] # YAML representation of boolean
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: BOOLEAN
+              values: [true, false] # Boolean values

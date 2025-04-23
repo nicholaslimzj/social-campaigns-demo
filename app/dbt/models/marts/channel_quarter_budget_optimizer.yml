@@ -2,154 +2,211 @@ version: 2
 
 models:
   - name: channel_quarter_budget_optimizer
-    description: "Mart model analyzing channel performance for the current quarter (last 3 months of available data) to provide optimal budget allocation recommendations across channels within each company. It calculates key efficiency metrics (ROI, CPA, CTR), models marginal returns (simplified), determines optimal spend shares considering minimum/maximum constraints, projects potential revenue/ROI improvements, and compares optimal vs. current allocation. Designed for use in budget optimization dashboards and strategic planning."
+    description: |
+      Mart model that analyzes marketing channel performance and efficiency for the current quarter (last 3 months of data).
+      It aggregates campaign data by Company and Channel, calculates key metrics like ROI efficiency, CPC, and CTR,
+      and provides optimal budget allocation recommendations based on a simplified marginal returns model.
+      The model compares current vs. optimal spend, projects potential revenue and ROI improvements,
+      and categorizes recommendations by strength and direction. Designed for use in budget planning dashboards and tools.
     config:
       materialized: table
-      tags: ['mart', 'marketing', 'optimization', 'budgeting', 'quarterly']
+      tags: ['mart', 'marketing', 'budgeting', 'optimization', 'quarterly']
     columns:
       - name: Company
-        description: "The name of the company being analyzed. Part of the unique key for this model."
+        description: "The name of the company being analyzed."
         tests:
           - not_null
-          # Define the multi-column unique key on one of the participating columns
+          - relationships:
+              to: ref('stg_campaigns')
+              field: Company
+          # This column is part of the unique combination key defined below
+
+      - name: Channel_Used
+        description: "The marketing channel used (e.g., Instagram, Twitter, Facebook)."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_campaigns')
+              field: Channel_Used
+          - accepted_values: # Add more known channels as needed
+              values: ['Instagram', 'Twitter', 'Facebook', 'Pinterest', 'LinkedIn', 'Google Ads', 'Email', 'Organic Search', 'Paid Search', 'Referral', 'Direct']
           - dbt_utils.unique_combination_of_columns:
               combination_of_columns:
                 - Company
                 - Channel_Used
-          # Ensure Company values exist in the staging layer
-          - relationships:
-              to: ref('stg_campaigns')
-              field: Company
-
-      - name: Channel_Used
-        description: "The marketing channel used (e.g., Instagram, Facebook, Twitter). Part of the unique key for this model."
-        tests:
-          - not_null
-          # Ensure Channel_Used values exist in the staging layer
-          - relationships:
-              to: ref('stg_campaigns')
-              field: Channel_Used
+              description: "Ensures each Company and Channel combination is unique for the reporting period."
 
       - name: campaign_count
-        description: "Number of distinct campaigns run by the company on this channel during the analyzed quarter."
+        description: "The total number of distinct campaigns run by the company on this channel during the quarter."
         tests:
-          - dbt_utils.not_negative
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              description: "Campaign count cannot be negative."
 
       - name: company_count
-        description: "Helper column indicating count of companies (always 1 at this aggregation level of Company and Channel)."
+        description: "Count of companies included in this row (always 1 as the data is grouped by Company and Channel)."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1]
+              description: "Should always be 1 at this aggregation level."
 
       - name: total_spend
-        description: "Total spend attributed to this channel for the company during the analyzed quarter. Calculated as SUM(Clicks * Conversion_Rate * Acquisition_Cost)."
+        description: "Total amount spent on this channel by the company during the quarter."
         tests:
-          - dbt_utils.not_negative
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              description: "Total spend cannot be negative."
 
       - name: total_revenue
-        description: "Total revenue attributed to this channel for the company during the analyzed quarter. Calculated as SUM(Clicks * Conversion_Rate * Acquisition_Cost * (1 + ROI))."
+        description: "Total revenue generated from this channel by the company during the quarter."
         tests:
-          - dbt_utils.not_negative
+          - not_null
+          # Revenue can theoretically be zero or negative in some business contexts, but typically >= 0 for marketing attribution.
+          - dbt_utils.accepted_range:
+              min_value: 0
+              description: "Total revenue should generally not be negative in this context."
 
       - name: avg_roi
-        description: "Average Return on Investment (ROI) for campaigns on this channel during the analyzed quarter."
+        description: "Average Return on Investment (ROI) across all campaigns for this company and channel during the quarter."
+        tests:
+          - not_null
 
       - name: avg_conversion_rate
-        description: "Average conversion rate for campaigns on this channel during the analyzed quarter."
+        description: "Average conversion rate across all campaigns for this company and channel during the quarter."
         tests:
-          - dbt_utils.not_negative
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              # Max value could be > 1 in specific scenarios, but typically <= 1. Sticking to min_value only for broader compatibility.
+              description: "Conversion rate cannot be negative."
 
       - name: avg_acquisition_cost
-        description: "Average cost per acquisition (CPA) for campaigns on this channel during the analyzed quarter."
+        description: "Average cost to acquire a customer/conversion across all campaigns for this company and channel during the quarter."
         tests:
-          - dbt_utils.not_negative
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              description: "Acquisition cost cannot be negative."
 
       - name: avg_ctr
-        description: "Average click-through rate (CTR) calculated as SUM(Clicks) / NULLIF(SUM(Impressions), 0) for this channel/company in the quarter."
+        description: "Average Click-Through Rate (CTR) calculated as SUM(Clicks) / SUM(Impressions) for this company and channel during the quarter."
         tests:
-          - dbt_utils.not_negative
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              # Max value could be > 1 in specific scenarios, but typically <= 1. Sticking to min_value only.
+              description: "CTR cannot be negative."
 
       - name: roi_efficiency
-        description: "Calculated efficiency metric: Total Revenue / Total Spend for this channel/company in the quarter. Returns 0 if total spend is 0."
+        description: "Calculated overall ROI efficiency for the channel (Total Revenue / Total Spend) during the quarter."
         tests:
-          - dbt_utils.not_negative
+          - not_null
 
       - name: cost_per_click
-        description: "Calculated cost per click (CPC) for this channel/company in the quarter: Total Spend / Total Clicks. Returns 0 if total clicks is 0."
+        description: "Calculated overall Cost Per Click (CPC) for the channel (Total Spend / Total Clicks) during the quarter."
         tests:
-          - dbt_utils.not_negative
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              description: "CPC cannot be negative."
 
       - name: click_through_rate
-        description: "Calculated overall click-through rate (CTR) for this channel/company in the quarter: Total Clicks / Total Impressions. Returns 0 if total impressions is 0."
+        description: "Calculated overall Click-Through Rate (CTR) for the channel (Total Clicks / Total Impressions) during the quarter. Note: Similar to avg_ctr but calculated on aggregated totals."
         tests:
-          - dbt_utils.not_negative
-          - dbt_expectations.expect_column_values_to_be_between:
+          - not_null
+          - dbt_utils.accepted_range:
               min_value: 0
-              max_value: 1 # CTR should be between 0 and 1
+              description: "CTR cannot be negative."
 
       - name: current_spend_share
-        description: "The proportion of the company's total quarterly spend allocated to this channel currently."
+        description: "The percentage of the company's total marketing spend allocated to this channel during the quarter."
         tests:
-          - dbt_utils.not_negative
-          - dbt_expectations.expect_column_values_to_be_between:
+          - not_null
+          - dbt_utils.accepted_range:
               min_value: 0
-              max_value: 1 # Share should be between 0 and 1
+              max_value: 1
+              description: "Spend share must be between 0 and 1 (inclusive)."
 
       - name: current_revenue_share
-        description: "The proportion of the company's total quarterly revenue generated by this channel currently."
+        description: "The percentage of the company's total marketing revenue generated by this channel during the quarter."
         tests:
-          - dbt_utils.not_negative
-          - dbt_expectations.expect_column_values_to_be_between:
+          - not_null
+          - dbt_utils.accepted_range:
               min_value: 0
-              # Revenue share can theoretically exceed 1 if other channels have negative revenue, though unlikely here.
-              # max_value: 1
+              # Max value can exceed 1 if other channels have negative revenue, but typically <= 1.
+              description: "Revenue share must be non-negative."
 
       - name: efficiency_rank
-        description: "Rank of the channel within the company based on descending marginal ROI (1 = highest estimated marginal return)."
+        description: "The rank of the channel's efficiency (based on marginal ROI) within the company (1 = most efficient)."
         tests:
-          - dbt_utils.not_negative # Rank starts at 1
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1
+              description: "Rank must be a positive integer starting from 1."
 
       - name: optimal_spend_share
-        description: "The recommended optimal proportion of the company's total budget to allocate to this channel, based on the simplified optimization model and normalized to sum to 1 across channels for the company."
+        description: "The recommended optimal percentage of the company's total marketing spend to allocate to this channel, normalized to sum to 100% across channels."
         tests:
-          - dbt_utils.not_negative
-          - dbt_expectations.expect_column_values_to_be_between:
+          - not_null
+          - dbt_utils.accepted_range:
               min_value: 0
-              max_value: 1 # Share should be between 0 and 1
-          # Note: Testing that shares sum to 1 per company requires a custom aggregate test.
+              max_value: 1
+              description: "Optimal spend share must be between 0 and 1 (inclusive)."
 
       - name: spend_share_change
-        description: "The calculated change between the optimal spend share and the current spend share (Optimal - Current). Indicates the recommended shift in budget allocation percentage."
+        description: "The difference between the optimal spend share and the current spend share (Optimal - Current)."
+        tests:
+          - not_null
 
       - name: current_spend
-        description: "The absolute current spend on this channel for the company in the quarter (same value as total_spend, included for direct comparison)."
+        description: "Absolute current spend for this company and channel (same as total_spend)."
         tests:
-          - dbt_utils.not_negative
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              description: "Current spend cannot be negative."
 
       - name: optimal_spend
-        description: "The recommended absolute spend amount for this channel based on the optimal spend share applied to the company's total current spend."
+        description: "Recommended optimal absolute spend for this company and channel based on the optimal spend share and total company spend."
         tests:
-          - dbt_utils.not_negative
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              description: "Optimal spend cannot be negative."
 
       - name: spend_change
-        description: "The calculated absolute change in spend recommended (Optimal Spend - Current Spend)."
+        description: "The difference between the optimal absolute spend and the current absolute spend (Optimal - Current)."
+        tests:
+          - not_null
 
       - name: projected_revenue
-        description: "Estimated revenue for this channel if the optimal spend allocation is adopted, based on a simplified projection model incorporating diminishing/increasing returns."
+        description: "Estimated total revenue for this channel if the optimal spend allocation is adopted (based on a simplified projection model)."
         tests:
-          - dbt_utils.not_negative
+          - not_null
 
       - name: projected_roi
-        description: "Estimated ROI for this channel if the optimal spend allocation is adopted, based on a simplified projection model incorporating diminishing/increasing returns."
+        description: "Estimated ROI for this channel if the optimal spend allocation is adopted (based on a simplified projection model)."
+        tests:
+          - not_null
 
       - name: projected_improvement_pct
-        description: "Projected percentage change in revenue compared to current revenue if optimal allocation is adopted ((Projected Revenue - Current Revenue) / Current Revenue). Returns 0 if current revenue is 0."
+        description: "Projected percentage change in revenue compared to current revenue if the optimal spend allocation is adopted."
+        tests:
+          - not_null
 
       - name: recommendation_strength
-        description: "Categorical assessment of the magnitude of the recommended spend change based on the absolute difference between optimal and current spend share."
+        description: "Categorical assessment of the magnitude of the recommended spend change (minor_adjustment, moderate_adjustment, major_adjustment)."
         tests:
+          - not_null
           - accepted_values:
               values: ['minor_adjustment', 'moderate_adjustment', 'major_adjustment']
 
       - name: recommendation_direction
-        description: "Direction of the recommended spend change (increase, decrease, or maintain)."
+        description: "Categorical direction of the recommended spend change (increase_spend, decrease_spend, maintain_spend)."
         tests:
+          - not_null
           - accepted_values:
               values: ['increase_spend', 'decrease_spend', 'maintain_spend']

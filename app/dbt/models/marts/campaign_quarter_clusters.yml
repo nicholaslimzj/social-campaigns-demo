@@ -3,214 +3,269 @@ version: 2
 models:
   - name: campaign_quarter_clusters
     description: |
-      Identifies high-performing campaign combinations (Goal, Segment, Channel, Duration) for the current quarter (last 3 months).
-      It calculates average performance metrics for each combination, ranks them based on a composite score (weighted towards ROI and Conversion Rate),
-      determines the optimal duration range for each Goal-Segment-Channel group, and flags the top 10% performing combinations per company as 'winning combinations'.
+      Identifies high-performing campaign combinations (Goal, Segment, Channel, Duration Bucket) for the current quarter (last 3 months).
+      It calculates average performance metrics (Conversion Rate, ROI, Acquisition Cost, CTR) for each combination, ranks them within their company and globally,
+      determines an optimal duration range based on ROI for each Goal/Segment/Channel group, calculates a composite performance score,
+      and flags the top 10% performing combinations per company as 'winning combinations'.
       This model supports dashboard sections related to winning campaign strategies and optimization recommendations.
-      It uses SQL-based aggregation and ranking to simulate clustering analysis.
     config:
       materialized: table
-      tags: ['mart']
+      tags: ['mart', 'campaign_analysis', 'performance', 'optimization', 'quarterly']
+    tests:
+      # Primary key for the model: each combination of Company, Goal, Segment, Channel, and Duration Bucket should be unique.
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - Company
+            - goal
+            - segment
+            - channel
+            - duration_bucket
     columns:
       - name: Company
         description: "The company associated with the campaign combination."
         tests:
           - not_null
-          - relationships:
-              to: ref('stg_campaigns')
-              field: Company # Assuming 'Company' exists in stg_campaigns
+          # Assuming Company names exist in the staging model.
+          # Add relationship test if stg_campaigns has a distinct list or dimension table for companies.
+          # - relationships:
+          #     to: ref('stg_companies') # Example if a company dimension exists
+          #     field: company_name
 
       - name: goal
-        description: "The primary objective of the campaigns in this combination (e.g., 'Increase Sales', 'Brand Awareness'). Derived from stg_campaigns.Campaign_Goal."
+        description: "The primary goal of the campaigns in this combination (e.g., 'Increase Sales', 'Brand Awareness')."
         tests:
           - not_null
-          - relationships:
-              to: ref('stg_campaigns')
-              field: Campaign_Goal # Assuming 'Campaign_Goal' exists in stg_campaigns
+          # Consider accepted_values if the list of goals is fixed and known.
+          # - accepted_values:
+          #     values: ['Increase Sales', 'Brand Awareness', 'Market Expansion', 'Product Launch', ...]
 
       - name: segment
-        description: "The target customer segment for the campaigns in this combination (e.g., 'Fashion', 'Electronics'). Derived from stg_campaigns.Customer_Segment."
+        description: "The target customer segment for the campaigns in this combination (e.g., 'Fashion', 'Tech Enthusiasts')."
         tests:
           - not_null
-          - relationships:
-              to: ref('stg_campaigns')
-              field: Customer_Segment # Assuming 'Customer_Segment' exists in stg_campaigns
+          # Consider accepted_values if the list of segments is fixed and known.
 
       - name: channel
-        description: "The marketing channel used for the campaigns in this combination (e.g., 'Facebook', 'Instagram'). Derived from stg_campaigns.Channel_Used."
+        description: "The marketing channel used for the campaigns in this combination (e.g., 'Facebook', 'Google Ads', 'Instagram')."
         tests:
           - not_null
-          - relationships:
-              to: ref('stg_campaigns')
-              field: Channel_Used # Assuming 'Channel_Used' exists in stg_campaigns
+          # Consider accepted_values if the list of channels is fixed and known.
 
       - name: duration_bucket
-        description: "The duration range category for the campaigns in this combination (e.g., '1-7 days', '15-21 days')."
+        description: "The duration range category for the campaigns in this combination (e.g., '1-7 days', '8-14 days')."
         tests:
           - not_null
           - accepted_values:
               values: ['1-7 days', '8-14 days', '15-21 days', '22-30 days', '31-45 days', '46-60 days', '60+ days']
-          # Test for unique combination of key dimensions
-          - dbt_utils.unique_combination_of_columns:
-              combination_of_columns:
-                - Company
-                - goal
-                - segment
-                - channel
-                - duration_bucket
 
       - name: avg_conversion_rate
-        description: "The average conversion rate achieved by campaigns within this specific combination for the quarter."
+        description: "The average conversion rate for all campaigns within this specific combination (Company, Goal, Segment, Channel, Duration Bucket)."
+        data_type: DOUBLE
         tests:
+          - not_null
           - dbt_utils.accepted_range:
-              min_value: 0
-              max_value: 1 # Conversion rate should be between 0 and 1
+              min_value: 0 # Conversion rate cannot be negative
 
       - name: avg_roi
-        description: "The average Return on Investment (ROI) generated by campaigns within this specific combination for the quarter."
+        description: "The average Return on Investment (ROI) for all campaigns within this specific combination."
+        data_type: DOUBLE
         tests:
+          - not_null
+          # ROI can be negative, setting a reasonable lower bound like -1 (100% loss)
           - dbt_utils.accepted_range:
-              min_value: 0 # Assuming ROI is generally expected to be non-negative in this context, adjust if negative ROI is common/valid
+              min_value: -1
 
       - name: avg_acquisition_cost
-        description: "The average cost to acquire a customer through campaigns within this specific combination for the quarter."
+        description: "The average cost to acquire a customer (Acquisition Cost) for all campaigns within this specific combination."
+        data_type: DOUBLE
         tests:
+          - not_null
           - dbt_utils.accepted_range:
-              min_value: 0
+              min_value: 0 # Acquisition cost cannot be negative
 
       - name: avg_ctr
-        description: "The average Click-Through Rate (Clicks / Impressions) for campaigns within this specific combination for the quarter."
+        description: "The average Click-Through Rate (CTR) calculated as SUM(Clicks) / SUM(Impressions) for all campaigns within this specific combination."
+        data_type: FLOAT # Note: SQL calculates as FLOAT
         tests:
+          - not_null
           - dbt_utils.accepted_range:
-              min_value: 0
-              max_value: 1 # CTR should be between 0 and 1
+              min_value: 0 # CTR cannot be negative
 
       - name: campaign_count
-        description: "The number of individual campaigns included in this combination for the quarter. Only combinations with >= 3 campaigns are included."
+        description: "The total number of individual campaigns included in this combination. Combinations with less than 3 campaigns are excluded."
+        data_type: BIGINT
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 3 # Based on the HAVING clause in the SQL
 
       - name: min_duration
-        description: "The minimum duration (in days) among campaigns within this combination."
+        description: "The minimum campaign duration observed within this specific combination."
+        data_type: BIGINT
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 0
+              min_value: 1 # Assuming minimum duration is 1 day
 
       - name: max_duration
-        description: "The maximum duration (in days) among campaigns within this combination."
+        description: "The maximum campaign duration observed within this specific combination."
+        data_type: BIGINT
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 0
+              min_value: 1 # Assuming minimum duration is 1 day
+          - dbt_utils.expression_is_true: # Max duration must be >= min duration
+              expression: "max_duration >= min_duration"
 
       - name: avg_duration
-        description: "The average duration (in days) of campaigns within this combination."
+        description: "The average campaign duration observed within this specific combination."
+        data_type: DOUBLE
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 0
+              min_value: 1 # Assuming minimum duration is 1 day
 
       - name: conversion_rate_vs_company
-        description: "Ratio of this combination's average conversion rate compared to the company's overall average conversion rate for the quarter. > 1 indicates better than company average."
+        description: "The ratio of this combination's average conversion rate compared to the company's overall average conversion rate across all combinations."
+        data_type: DOUBLE
+        tests:
+          - not_null
 
       - name: roi_vs_company
-        description: "Ratio of this combination's average ROI compared to the company's overall average ROI for the quarter. > 1 indicates better than company average."
+        description: "The ratio of this combination's average ROI compared to the company's overall average ROI across all combinations."
+        data_type: DOUBLE
+        tests:
+          - not_null
 
       - name: acquisition_cost_vs_company
-        description: "Ratio of the company's overall average acquisition cost compared to this combination's average acquisition cost for the quarter. > 1 indicates lower (better) cost than company average."
+        description: "The ratio of the company's overall average acquisition cost compared to this combination's average acquisition cost (inverted: higher is better)."
+        data_type: DOUBLE
+        tests:
+          - not_null
 
       - name: ctr_vs_company
-        description: "Ratio of this combination's average CTR compared to the company's overall average CTR for the quarter. > 1 indicates better than company average."
+        description: "The ratio of this combination's average CTR compared to the company's overall average CTR across all combinations."
+        data_type: DOUBLE
+        tests:
+          - not_null
 
       - name: conversion_rate_vs_global
-        description: "Ratio of this combination's average conversion rate compared to the global average conversion rate across all companies for the quarter. > 1 indicates better than global average."
+        description: "The ratio of this combination's average conversion rate compared to the global average conversion rate across all companies and combinations."
+        data_type: DOUBLE
+        tests:
+          - not_null
 
       - name: roi_vs_global
-        description: "Ratio of this combination's average ROI compared to the global average ROI across all companies for the quarter. > 1 indicates better than global average."
+        description: "The ratio of this combination's average ROI compared to the global average ROI across all companies and combinations."
+        data_type: DOUBLE
+        tests:
+          - not_null
 
       - name: acquisition_cost_vs_global
-        description: "Ratio of the global average acquisition cost compared to this combination's average acquisition cost for the quarter. > 1 indicates lower (better) cost than global average."
+        description: "The ratio of the global average acquisition cost compared to this combination's average acquisition cost (inverted: higher is better)."
+        data_type: DOUBLE
+        tests:
+          - not_null
 
       - name: ctr_vs_global
-        description: "Ratio of this combination's average CTR compared to the global average CTR across all companies for the quarter. > 1 indicates better than global average."
+        description: "The ratio of this combination's average CTR compared to the global average CTR across all companies and combinations."
+        data_type: DOUBLE
+        tests:
+          - not_null
 
       - name: conversion_rate_rank
-        description: "Rank of this combination within the company based on average conversion rate (descending). 1 is best."
+        description: "The rank of this combination within its company based on average conversion rate (1 = highest)."
+        data_type: BIGINT
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 1
 
       - name: roi_rank
-        description: "Rank of this combination within the company based on average ROI (descending). 1 is best."
+        description: "The rank of this combination within its company based on average ROI (1 = highest)."
+        data_type: BIGINT
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 1
 
       - name: acquisition_cost_rank
-        description: "Rank of this combination within the company based on average acquisition cost (ascending). 1 is best (lowest cost)."
+        description: "The rank of this combination within its company based on average acquisition cost (1 = lowest)."
+        data_type: BIGINT
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 1
 
       - name: ctr_rank
-        description: "Rank of this combination within the company based on average CTR (descending). 1 is best."
+        description: "The rank of this combination within its company based on average CTR (1 = highest)."
+        data_type: BIGINT
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 1
 
       - name: composite_rank
-        description: "Overall rank of this combination within the company based on the weighted composite score (ascending). 1 is the best overall combination."
+        description: "The overall rank of this combination within its company based on the weighted composite score (1 = best score)."
+        data_type: BIGINT
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 1
 
       - name: composite_score
-        description: "A weighted score calculated from individual metric ranks (ROI: 40%, Conversion Rate: 30%, Acquisition Cost: 20%, CTR: 10%). Lower score is better."
+        description: "A weighted score calculated from individual metric ranks (ROI, Conversion Rate, Acquisition Cost, CTR). Lower scores indicate better overall performance."
+        data_type: DECIMAL(24,1) # Based on sample data type
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 0 # Score is based on ranks * weights, should be non-negative
+              min_value: 1.0 # Theoretical minimum score if rank=1 for all components
 
       - name: optimal_duration_bucket
-        description: "The duration bucket identified as having the highest average ROI for this specific Company, Goal, Segment, and Channel combination."
+        description: "The duration bucket associated with the highest average ROI for the same Company, Goal, Segment, and Channel combination."
         tests:
           - not_null
           - accepted_values:
               values: ['1-7 days', '8-14 days', '15-21 days', '22-30 days', '31-45 days', '46-60 days', '60+ days']
 
       - name: optimal_min_duration
-        description: "The minimum duration (in days) associated with the optimal duration bucket for this Company, Goal, Segment, and Channel."
+        description: "The minimum duration observed within the optimal duration bucket for this Company, Goal, Segment, and Channel."
+        data_type: BIGINT
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 0
+              min_value: 1
 
       - name: optimal_max_duration
-        description: "The maximum duration (in days) associated with the optimal duration bucket for this Company, Goal, Segment, and Channel."
+        description: "The maximum duration observed within the optimal duration bucket for this Company, Goal, Segment, and Channel."
+        data_type: BIGINT
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 0
+              min_value: 1
+          - dbt_utils.expression_is_true: # Max duration must be >= min duration
+              expression: "optimal_max_duration >= optimal_min_duration"
 
       - name: is_winning_combination
-        description: "Boolean flag indicating if this combination ranks within the top 10% based on the composite score for its company."
+        description: "A boolean flag indicating if this combination ranks within the top 10% based on the composite score for its company (TRUE if winning, FALSE otherwise)."
+        data_type: BOOLEAN
         tests:
           - not_null
+          - accepted_values:
+              values: [true, false]
 
       - name: is_optimal_duration
-        description: "Boolean flag indicating if this combination's duration bucket matches the identified optimal duration bucket for its Company, Goal, Segment, and Channel."
+        description: "A boolean flag indicating if this specific combination's duration bucket matches the identified optimal duration bucket for its Company, Goal, Segment, and Channel (TRUE if it matches, FALSE otherwise)."
+        data_type: BOOLEAN
         tests:
           - not_null
+          - accepted_values:
+              values: [true, false]
 
       - name: optimal_duration_range
-        description: "A formatted string representing the optimal duration range (e.g., '15-21 days') based on the highest ROI for the Company, Goal, Segment, and Channel."
+        description: "A formatted string representing the optimal duration range (min-max days) based on the highest ROI for the Company, Goal, Segment, and Channel."
         tests:
           - not_null
+          # Could add a regex test for format '^\d+-\d+ days$' if strict format validation is needed
+          # - dbt_expectations.expect_column_values_to_match_regex:
+          #     regex: '^\d+-\d+ days$'

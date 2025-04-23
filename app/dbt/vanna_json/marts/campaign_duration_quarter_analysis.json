@@ -1,11 +1,11 @@
 {
   "name": "campaign_duration_quarter_analysis",
-  "description": "Analyzes campaign performance metrics based on campaign duration, aggregated over the most recent quarter (last 3 months of data).\nIt buckets campaigns by duration ranges and calculates average performance (ROI, Conversion Rate, CTR, Acquisition Cost) for each bucket across different dimensions: overall company, campaign goal, and channel used.\nThe model identifies the optimal duration bucket (based on highest average ROI) for each dimension/category combination.\nIt also provides detailed performance data per duration bucket (for heatmaps) and per exact duration day (for scatter plots), including ROI impact calculations relative to averages.\nThis model supports dashboards visualizing campaign duration impact and providing optimization recommendations.\n",
+  "description": "Analyzes campaign performance metrics (ROI, Conversion Rate, CTR, etc.) across different campaign duration buckets for the current quarter (last 3 months of available data). Identifies optimal campaign durations based on ROI for overall company performance, specific campaign goals, and channels. Also provides detailed performance data per duration bucket and exact duration for visualization and deeper analysis.",
   "columns": [
     {
       "name": "analysis_type",
       "type": "VARCHAR",
-      "description": "Categorizes the type of analysis represented by the row: 'optimal_durations' (summary of best performing duration), 'company_duration_heatmap', 'goal_duration_heatmap', 'channel_duration_heatmap' (performance per duration bucket for heatmap viz), or 'exact_duration_performance' (performance per specific day duration for scatter plots).",
+      "description": "Type of analysis represented by the row (e.g., 'optimal_durations', 'company_duration_heatmap', 'goal_duration_heatmap', 'channel_duration_heatmap', 'exact_duration_performance').",
       "tests": [
         "not_null",
         "accepted_values"
@@ -15,17 +15,16 @@
     {
       "name": "Company",
       "type": "VARCHAR",
-      "description": "The name of the company associated with the campaign data.",
+      "description": "Name of the company running the campaigns. Links to the company dimension in the staging layer.",
       "tests": [
-        "not_null",
-        "relationships"
+        "not_null"
       ],
       "tags": []
     },
     {
       "name": "dimension",
       "type": "VARCHAR",
-      "description": "The dimension used for grouping the analysis ('Company', 'Goal', 'Channel'). NULL for 'exact_duration_performance' analysis type.",
+      "description": "The dimension used for grouping the analysis (e.g., 'Company', 'Goal', 'Channel'). Null for exact duration performance rows.",
       "tests": [
         "accepted_values"
       ],
@@ -34,16 +33,14 @@
     {
       "name": "category",
       "type": "VARCHAR",
-      "description": "The specific value within the dimension (e.g., the company name if dimension='Company', the goal name if dimension='Goal', the channel name if dimension='Channel'). NULL for 'exact_duration_performance' analysis type.",
-      "tests": [
-        "not_null"
-      ],
+      "description": "The specific category within the dimension being analyzed (e.g., company name, goal name, channel name). Null for exact duration performance rows.",
+      "tests": [],
       "tags": []
     },
     {
       "name": "optimal_duration_bucket",
       "type": "VARCHAR",
-      "description": "The calculated optimal duration range (e.g., '15-21 days') based on the highest average ROI for the given Company/Dimension/Category. Populated only when analysis_type = 'optimal_durations'.",
+      "description": "The duration bucket identified as optimal (highest average ROI) for the given company/dimension/category (e.g., '15-21 days'). Null for non-optimal analysis types.",
       "tests": [
         "accepted_values"
       ],
@@ -52,7 +49,7 @@
     {
       "name": "optimal_min_duration",
       "type": "BIGINT",
-      "description": "The minimum campaign duration (in days) included in the specific duration bucket or optimal bucket. Populated for 'optimal_durations' and heatmap analysis types.",
+      "description": "The minimum campaign duration (in days) included in the optimal bucket or the specific bucket for heatmap analysis. Null for exact duration performance rows.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -61,7 +58,7 @@
     {
       "name": "optimal_max_duration",
       "type": "BIGINT",
-      "description": "The maximum campaign duration (in days) included in the specific duration bucket or optimal bucket. Populated for 'optimal_durations' and heatmap analysis types.",
+      "description": "The maximum campaign duration (in days) included in the optimal bucket or the specific bucket for heatmap analysis. Null for exact duration performance rows.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -70,17 +67,18 @@
     {
       "name": "optimal_roi",
       "type": "DOUBLE",
-      "description": "The average Return on Investment (ROI) associated with the optimal_duration_bucket. Populated only when analysis_type = 'optimal_durations'.",
+      "description": "The average Return on Investment (ROI) achieved within the identified optimal duration bucket. Null for other analysis types.",
       "tests": [
-        "dbt_utils.accepted_range"
+        "not_null"
       ],
       "tags": []
     },
     {
       "name": "optimal_conversion_rate",
       "type": "DOUBLE",
-      "description": "The average Conversion Rate associated with the optimal_duration_bucket. Populated only when analysis_type = 'optimal_durations'.",
+      "description": "The average conversion rate achieved within the identified optimal duration bucket. Null for other analysis types.",
       "tests": [
+        "not_null",
         "dbt_utils.accepted_range"
       ],
       "tags": []
@@ -88,7 +86,7 @@
     {
       "name": "optimal_roi_per_day",
       "type": "DOUBLE",
-      "description": "The average Return on Investment (ROI) per day, calculated for the optimal_duration_bucket to normalize ROI across different durations. Populated only when analysis_type = 'optimal_durations'.",
+      "description": "The average ROI per day achieved within the identified optimal duration bucket (ROI / Duration). Null for other analysis types.",
       "tests": [
         "not_null"
       ],
@@ -97,7 +95,7 @@
     {
       "name": "optimal_duration_range",
       "type": "VARCHAR",
-      "description": "A formatted string representing the optimal duration range (e.g., '45-45 days' or '15-21 days'). Populated only when analysis_type = 'optimal_durations'.",
+      "description": "A formatted string representing the optimal duration range (e.g., '15-21 days'). Null for other analysis types.",
       "tests": [
         "not_null"
       ],
@@ -106,8 +104,9 @@
     {
       "name": "Duration",
       "type": "BIGINT",
-      "description": "The exact campaign duration in days. Populated only when analysis_type = 'exact_duration_performance'.",
+      "description": "The exact campaign duration in days. Populated only for 'exact_duration_performance' analysis type.",
       "tests": [
+        "not_null",
         "dbt_utils.accepted_range"
       ],
       "tags": []
@@ -115,8 +114,9 @@
     {
       "name": "campaign_count",
       "type": "BIGINT",
-      "description": "The number of campaigns aggregated within the specific group (duration bucket/dimension/category or exact duration). Populated for heatmap and exact duration analysis types.",
+      "description": "The number of campaigns aggregated in this row (for a specific duration bucket or exact duration). Null for 'optimal_durations' analysis type.",
       "tests": [
+        "not_null",
         "dbt_utils.accepted_range"
       ],
       "tags": []
@@ -124,8 +124,9 @@
     {
       "name": "avg_conversion_rate",
       "type": "DOUBLE",
-      "description": "The average Conversion Rate for the campaigns within the specific group. Populated for heatmap and exact duration analysis types.",
+      "description": "The average conversion rate for the campaigns in this group (duration bucket or exact duration). Null for 'optimal_durations' analysis type.",
       "tests": [
+        "not_null",
         "dbt_utils.accepted_range"
       ],
       "tags": []
@@ -133,7 +134,7 @@
     {
       "name": "avg_roi",
       "type": "DOUBLE",
-      "description": "The average Return on Investment (ROI) for the campaigns within the specific group. Populated for heatmap and exact duration analysis types.",
+      "description": "The average ROI for the campaigns in this group (duration bucket or exact duration). Null for 'optimal_durations' analysis type.",
       "tests": [
         "not_null"
       ],
@@ -142,8 +143,9 @@
     {
       "name": "avg_acquisition_cost",
       "type": "DOUBLE",
-      "description": "The average Acquisition Cost for the campaigns within the specific group. Populated for heatmap and exact duration analysis types.",
+      "description": "The average acquisition cost for the campaigns in this group (duration bucket or exact duration). Null for 'optimal_durations' analysis type.",
       "tests": [
+        "not_null",
         "dbt_utils.accepted_range"
       ],
       "tags": []
@@ -151,8 +153,9 @@
     {
       "name": "avg_ctr",
       "type": "FLOAT",
-      "description": "The average Click-Through Rate (CTR) for the campaigns within the specific group. Populated for heatmap and exact duration analysis types.",
+      "description": "The average Click-Through Rate (CTR) for the campaigns in this group (duration bucket or exact duration). Null for 'optimal_durations' analysis type.",
       "tests": [
+        "not_null",
         "dbt_utils.accepted_range"
       ],
       "tags": []
@@ -160,7 +163,7 @@
     {
       "name": "avg_roi_per_day",
       "type": "DOUBLE",
-      "description": "The average Return on Investment (ROI) per day for the campaigns within the specific group, used to normalize ROI across different durations. Populated for heatmap and exact duration analysis types.",
+      "description": "The average ROI per day (ROI / Duration) for the campaigns in this group (duration bucket or exact duration). Null for 'optimal_durations' analysis type.",
       "tests": [
         "not_null"
       ],
@@ -169,7 +172,7 @@
     {
       "name": "roi_impact",
       "type": "DOUBLE",
-      "description": "The absolute difference between the average ROI of the duration bucket and the overall average ROI for its specific dimension/category (e.g., avg ROI for '15-21 days' bucket minus avg ROI for 'Goal=Brand Awareness'). Populated for heatmap analysis types.",
+      "description": "The absolute difference between the average ROI of this duration bucket and the overall average ROI for the corresponding dimension (Company, Goal, or Channel). Populated only for heatmap analysis types.",
       "tests": [
         "not_null"
       ],
@@ -178,7 +181,7 @@
     {
       "name": "roi_impact_pct",
       "type": "DOUBLE",
-      "description": "The percentage difference between the average ROI of the duration bucket and the overall average ROI for its specific dimension/category. Populated for heatmap analysis types.",
+      "description": "The percentage difference between the average ROI of this duration bucket and the overall average ROI for the corresponding dimension (Company, Goal, or Channel). Populated only for heatmap analysis types.",
       "tests": [
         "not_null"
       ],
@@ -187,8 +190,9 @@
     {
       "name": "duration_bucket_num",
       "type": "INTEGER",
-      "description": "A numerical representation of the duration bucket (1: '1-7 days', 2: '8-14 days', ..., 7: '60+ days'). Populated for heatmap analysis types.",
+      "description": "A numerical representation of the duration bucket (1-7). Populated only for heatmap analysis types.",
       "tests": [
+        "not_null",
         "accepted_values"
       ],
       "tags": []

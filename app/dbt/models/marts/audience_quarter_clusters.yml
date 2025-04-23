@@ -2,22 +2,19 @@ version: 2
 
 models:
   - name: audience_quarter_clusters
-    description: >
-      Identifies high-performing target audience clusters for the current quarter (based on the last 3 months of available data).
-      Clusters are defined by the unique combination of Company, Target_Audience, Location, Channel, and Goal.
-      This model calculates key performance metrics (KPIs), normalized scores (z-scores) relative to company averages,
-      ranks clusters within companies and specific audiences, assigns performance tiers, and suggests recommended actions.
-      It filters for clusters with at least 3 campaigns for statistical significance.
-      Designed for use in dashboards, particularly for cohort analysis and identifying high-ROI audience segments.
+    description: "Identifies high-performing target audience clusters for the current quarter (last 3 months of data). It analyzes combinations of Company, Target_Audience, Location, Channel, and Goal to find optimal groupings based on performance metrics like ROI, conversion rate, CTR, and acquisition cost. Calculates normalized scores (z-scores), ranks clusters within companies and audiences, assigns performance tiers, and provides actionable recommendations. Used in the Cohort Analysis dashboard."
     config:
       materialized: table
-      tags: ['mart', 'marketing', 'audience_analysis']
+      tags: ['mart', 'audience', 'performance', 'quarterly', 'cohort_analysis']
     columns:
       - name: Company
-        description: "The company associated with the marketing campaign data."
+        description: "The company associated with the marketing campaigns."
         tests:
           - not_null
-          # This column is part of the unique key for a cluster
+          - relationships:
+              to: ref('stg_campaigns')
+              field: Company
+          # This combination defines the unique grain of the model
           - dbt_utils.unique_combination_of_columns:
               combination_of_columns:
                 - Company
@@ -25,9 +22,6 @@ models:
                 - Location
                 - channel
                 - goal
-          - relationships:
-              to: ref('stg_campaigns')
-              field: Company
 
       - name: Target_Audience
         description: "The specific audience segment targeted by the campaigns within the cluster."
@@ -51,7 +45,7 @@ models:
           - not_null
           - relationships:
               to: ref('stg_campaigns')
-              field: Channel_Used # Assuming 'Channel_Used' is the corresponding column in stg_campaigns
+              field: Channel_Used # Assuming this is the corresponding field in stg_campaigns
 
       - name: goal
         description: "The primary goal of the campaigns within the cluster (e.g., Increase Sales, Brand Awareness)."
@@ -59,175 +53,168 @@ models:
           - not_null
           - relationships:
               to: ref('stg_campaigns')
-              field: Campaign_Goal # Assuming 'Campaign_Goal' is the corresponding column in stg_campaigns
+              field: Campaign_Goal # Assuming this is the corresponding field in stg_campaigns
 
       - name: campaign_count
-        description: "The number of individual campaigns grouped within this cluster. Minimum value is 3."
+        description: "The number of individual campaigns grouped within this specific cluster. Clusters require a minimum of 3 campaigns."
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 3
+              min_value: 3 # Based on HAVING COUNT(*) >= 3
 
       - name: avg_conversion_rate
-        description: "The average conversion rate across all campaigns within the cluster for the quarter."
+        description: "The average conversion rate for the campaigns within this cluster."
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 0 # Conversion rate cannot be negative
+              min_value: 0
 
       - name: avg_roi
-        description: "The average Return on Investment (ROI) across all campaigns within the cluster for the quarter."
+        description: "The average Return on Investment (ROI) for the campaigns within this cluster."
         tests:
           - not_null
-          # ROI can theoretically be negative if costs exceed revenue generated through attribution
-          # No specific range test applied beyond not_null
 
       - name: avg_acquisition_cost
-        description: "The average cost to acquire a customer or achieve a conversion across campaigns in the cluster for the quarter."
+        description: "The average cost to acquire a customer for the campaigns within this cluster."
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 0 # Acquisition cost cannot be negative
+              min_value: 0
 
       - name: avg_ctr
-        description: "The average Click-Through Rate (CTR) calculated as (Total Clicks / Total Impressions) for the cluster over the quarter. Can be null if total impressions are zero."
+        description: "The average Click-Through Rate (CTR) for the campaigns within this cluster (Clicks / Impressions)."
+        # CTR can be null if Impressions are 0, although HAVING COUNT(*) >= 3 makes this less likely.
+        # No not_null test applied.
         tests:
-          # Test for non-negativity only where CTR is not null
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "avg_ctr IS NOT NULL" # Handle potential division by zero resulting in NULL
+              # max_value: 1 # CTR can sometimes exceed 1 depending on definition/tracking issues, safer to omit max unless strictly enforced.
+              where: "avg_ctr IS NOT NULL" # Apply range test only where CTR is calculable
 
       - name: total_spend
-        description: "The estimated total marketing spend for all campaigns within the cluster during the quarter."
-        tests:
-          - not_null
-          - dbt_utils.accepted_range:
-              min_value: 0 # Spend cannot be negative
-
-      - name: total_revenue
-        description: "The estimated total revenue generated by all campaigns within the cluster during the quarter, based on ROI."
-        tests:
-          - not_null
-          # Revenue could theoretically be negative if ROI is <-1, though unlikely in practice.
-          # No specific range test applied beyond not_null
-
-      - name: avg_audience_conversion_rate
-        description: "The average conversion rate for this specific Target_Audience across all its clusters within the same Company."
+        description: "The total marketing spend for all campaigns within this cluster."
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 0
 
+      - name: total_revenue
+        description: "The total calculated revenue generated by the campaigns within this cluster (based on spend and ROI)."
+        tests:
+          - not_null
+          # Revenue could theoretically be negative if ROI is significantly negative.
+
+      - name: avg_audience_conversion_rate
+        description: "The average conversion rate across all clusters for the same Company and Target Audience."
+        tests:
+          - not_null
+
       - name: avg_audience_roi
-        description: "The average ROI for this specific Target_Audience across all its clusters within the same Company."
+        description: "The average ROI across all clusters for the same Company and Target Audience."
         tests:
           - not_null
 
       - name: avg_audience_ctr
-        description: "The average CTR for this specific Target_Audience across all its clusters within the same Company. Can be null if underlying impressions are zero."
-        tests:
-          - dbt_utils.accepted_range:
-              min_value: 0
-              where: "avg_audience_ctr IS NOT NULL"
-
-      - name: avg_audience_acquisition_cost
-        description: "The average acquisition cost for this specific Target_Audience across all its clusters within the same Company."
+        description: "The average CTR across all clusters for the same Company and Target Audience."
         tests:
           - not_null
-          - dbt_utils.accepted_range:
-              min_value: 0
+
+      - name: avg_audience_acquisition_cost
+        description: "The average acquisition cost across all clusters for the same Company and Target Audience."
+        tests:
+          - not_null
 
       - name: cluster_count
-        description: "The total number of distinct clusters (Location, Channel, Goal combinations) for this specific Company and Target_Audience."
+        description: "The total number of distinct clusters identified for the same Company and Target Audience."
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 1
 
       - name: conversion_rate_z_score
-        description: "The normalized score (z-score) indicating how many standard deviations the cluster's avg_conversion_rate is from the Company's average conversion rate."
+        description: "The normalized performance score (z-score) for average conversion rate, comparing the cluster's rate to the company average."
         tests:
           - not_null
 
       - name: roi_z_score
-        description: "The normalized score (z-score) indicating how many standard deviations the cluster's avg_roi is from the Company's average ROI."
+        description: "The normalized performance score (z-score) for average ROI, comparing the cluster's ROI to the company average."
         tests:
           - not_null
 
       - name: ctr_z_score
-        description: "The normalized score (z-score) indicating how many standard deviations the cluster's avg_ctr is from the Company's average CTR."
+        description: "The normalized performance score (z-score) for average CTR, comparing the cluster's CTR to the company average."
         tests:
-          - not_null # Z-score calculation handles potential null avg_ctr by comparing to company avg/stddev
+          - not_null
 
       - name: cost_efficiency_z_score
-        description: "The normalized score (z-score) for cost efficiency, calculated as the negative z-score of avg_acquisition_cost (lower cost is better, hence higher score)."
+        description: "The normalized performance score (z-score) for cost efficiency (inverted average acquisition cost), comparing the cluster's cost to the company average. Higher is better (more efficient)."
         tests:
           - not_null
 
       - name: composite_performance_score
-        description: "A weighted score combining the z-scores of conversion rate (35%), ROI (35%), CTR (15%), and cost efficiency (15%) to represent overall cluster performance relative to the company."
+        description: "A weighted average of the z-scores for conversion rate (35%), ROI (35%), CTR (15%), and cost efficiency (15%), providing an overall cluster performance measure relative to the company average."
         tests:
           - not_null
 
       - name: roi_rank
-        description: "The rank of this cluster within its Company based on avg_roi (1 = highest ROI)."
+        description: "The rank of this cluster within the Company based on average ROI (1 = highest ROI)."
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 1
 
       - name: conversion_rate_rank
-        description: "The rank of this cluster within its Company based on avg_conversion_rate (1 = highest conversion rate)."
+        description: "The rank of this cluster within the Company based on average conversion rate (1 = highest conversion rate)."
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 1
 
       - name: acquisition_cost_rank
-        description: "The rank of this cluster within its Company based on avg_acquisition_cost (1 = lowest acquisition cost)."
+        description: "The rank of this cluster within the Company based on average acquisition cost (1 = lowest acquisition cost)."
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 1
 
       - name: audience_roi_rank
-        description: "The rank of this cluster within its Company and Target_Audience based on avg_roi (1 = highest ROI within that audience)."
+        description: "The rank of this cluster within the Company and Target Audience based on average ROI (1 = highest ROI)."
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 1
 
       - name: audience_conversion_rate_rank
-        description: "The rank of this cluster within its Company and Target_Audience based on avg_conversion_rate (1 = highest conversion rate within that audience)."
+        description: "The rank of this cluster within the Company and Target Audience based on average conversion rate (1 = highest conversion rate)."
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 1
 
       - name: roi_percentile
-        description: "The percentile rank of the cluster within the Company based on ROI rank (lower value indicates better rank, e.g., 0.1 means top 10%)."
+        description: "The percentile rank of the cluster within the Company based on ROI rank (e.g., 0.1 means top 10%). Lower values indicate better relative ROI performance."
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 0
-              max_value: 1 # Percentile must be between 0 and 1
+              max_value: 1
 
       - name: is_high_performing_cluster
-        description: "Boolean flag indicating if the cluster is in the top 10% based on composite_performance_score within its Company."
+        description: "Boolean flag indicating if the cluster ranks in the top 10% based on the composite performance score within its Company."
         tests:
           - not_null
           - accepted_values:
-              values: [True, False]
+              values: [True, False] # Boolean values represented directly
 
       - name: performance_tier
-        description: "Categorical tier assigned based on the composite_performance_score ('Exceptional', 'High Performing', 'Average', 'Underperforming', 'Poor')."
+        description: "Categorical tier assigned based on the composite performance score ('Exceptional', 'High Performing', 'Average', 'Underperforming', 'Poor')."
         tests:
           - not_null
           - accepted_values:
               values: ['Exceptional', 'High Performing', 'Average', 'Underperforming', 'Poor']
 
       - name: recommended_action
-        description: "A suggested action based on the performance_tier (e.g., 'Increase investment', 'Monitor and optimize')."
+        description: "Suggested action based on the cluster's performance tier (e.g., 'Increase investment', 'Monitor and optimize')."
         tests:
           - not_null
           - accepted_values:

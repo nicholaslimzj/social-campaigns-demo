@@ -1,14 +1,13 @@
 {
   "name": "audience_quarter_anomalies",
-  "description": "This mart model identifies anomalies in audience performance metrics for the current quarter.\nIt aggregates key metrics by Company and Target Audience, calculates rolling statistics (mean, standard deviation)\nbased on the previous three quarters, and uses Z-scores to flag significant deviations (>2 standard deviations)\nfrom the historical trend. The model provides context for each anomaly, including its potential impact (positive/negative)\nand a descriptive summary, aiding in performance monitoring and risk management.\nTime Context: Current Quarter (based on the latest data in stg_campaigns)\nGrain: Company, Target_Audience for the current quarter\n",
+  "description": "Identifies anomalies in audience performance metrics at the Company and Target_Audience level for the current quarter.\nIt calculates rolling statistics (mean, standard deviation) for key metrics using the three preceding quarters.\nAnomalies are flagged using a Z-score methodology, comparing the current quarter's performance against the historical trend (Z-score > 2 or < -2).\nThis model provides context for each anomaly to aid investigation and is intended for use in anomaly detection dashboards, performance monitoring, and risk management visualizations.\nThe output contains one row per Company and Target_Audience for the most recent complete quarter.\n",
   "columns": [
     {
       "name": "Company",
       "type": "VARCHAR",
-      "description": "The name of the company associated with the campaign data. Primary dimension for analysis.",
+      "description": "The name of the company associated with the campaign data.",
       "tests": [
         "not_null",
-        "relationships",
         "dbt_utils.unique_combination_of_columns"
       ],
       "tags": []
@@ -16,18 +15,18 @@
     {
       "name": "Target_Audience",
       "type": "VARCHAR",
-      "description": "The specific audience segment targeted by the campaigns within the company. Secondary dimension for analysis.",
+      "description": "The specific audience segment targeted by the campaigns for the company.",
       "tests": [
-        "not_null",
-        "relationships"
+        "not_null"
       ],
       "tags": []
     },
     {
       "name": "avg_conversion_rate",
       "type": "DOUBLE",
-      "description": "Average conversion rate for the company-audience segment in the current quarter.",
+      "description": "The average conversion rate for this Company and Target Audience during the current quarter.",
       "tests": [
+        "not_null",
         "dbt_utils.accepted_range"
       ],
       "tags": []
@@ -35,14 +34,14 @@
     {
       "name": "conversion_rate_mean",
       "type": "DOUBLE",
-      "description": "Rolling average conversion rate calculated over the 3 quarters preceding the current quarter.",
+      "description": "The rolling average conversion rate over the 3 quarters preceding the current quarter.",
       "tests": [],
       "tags": []
     },
     {
       "name": "conversion_rate_std",
       "type": "DOUBLE",
-      "description": "Rolling population standard deviation of conversion rate calculated over the 3 quarters preceding the current quarter.",
+      "description": "The rolling population standard deviation of the conversion rate over the 3 quarters preceding the current quarter.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -51,14 +50,14 @@
     {
       "name": "conversion_rate_z",
       "type": "DOUBLE",
-      "description": "Z-score for the current quarter's average conversion rate, indicating deviation from the rolling mean in terms of rolling standard deviations.",
+      "description": "The Z-score for the current quarter's average conversion rate, indicating deviation from the rolling mean in terms of standard deviations.",
       "tests": [],
       "tags": []
     },
     {
       "name": "conversion_rate_anomaly",
       "type": "VARCHAR",
-      "description": "Flag indicating if the current quarter's average conversion rate is considered an anomaly ('anomaly') or within the expected range ('normal') based on a Z-score threshold (>|2|).",
+      "description": "Flag indicating if the conversion rate for the current quarter is considered an anomaly ('anomaly' or 'normal') based on the Z-score threshold (>|2|).",
       "tests": [
         "not_null",
         "accepted_values"
@@ -68,21 +67,23 @@
     {
       "name": "avg_roi",
       "type": "DOUBLE",
-      "description": "Average Return on Investment (ROI) for the company-audience segment in the current quarter.",
-      "tests": [],
+      "description": "The average Return on Investment (ROI) for this Company and Target Audience during the current quarter.",
+      "tests": [
+        "not_null"
+      ],
       "tags": []
     },
     {
       "name": "roi_mean",
       "type": "DOUBLE",
-      "description": "Rolling average ROI calculated over the 3 quarters preceding the current quarter.",
+      "description": "The rolling average ROI over the 3 quarters preceding the current quarter.",
       "tests": [],
       "tags": []
     },
     {
       "name": "roi_std",
       "type": "DOUBLE",
-      "description": "Rolling population standard deviation of ROI calculated over the 3 quarters preceding the current quarter.",
+      "description": "The rolling population standard deviation of the ROI over the 3 quarters preceding the current quarter.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -91,14 +92,14 @@
     {
       "name": "roi_z",
       "type": "DOUBLE",
-      "description": "Z-score for the current quarter's average ROI.",
+      "description": "The Z-score for the current quarter's average ROI, indicating deviation from the rolling mean.",
       "tests": [],
       "tags": []
     },
     {
       "name": "roi_anomaly",
       "type": "VARCHAR",
-      "description": "Flag indicating if the current quarter's average ROI is an anomaly ('anomaly') or normal ('normal').",
+      "description": "Flag indicating if the ROI for the current quarter is considered an anomaly ('anomaly' or 'normal') based on the Z-score threshold (>|2|).",
       "tests": [
         "not_null",
         "accepted_values"
@@ -108,8 +109,9 @@
     {
       "name": "avg_acquisition_cost",
       "type": "DOUBLE",
-      "description": "Average Acquisition Cost for the company-audience segment in the current quarter.",
+      "description": "The average acquisition cost for this Company and Target Audience during the current quarter.",
       "tests": [
+        "not_null",
         "dbt_utils.accepted_range"
       ],
       "tags": []
@@ -117,14 +119,14 @@
     {
       "name": "acquisition_cost_mean",
       "type": "DOUBLE",
-      "description": "Rolling average Acquisition Cost calculated over the 3 quarters preceding the current quarter.",
+      "description": "The rolling average acquisition cost over the 3 quarters preceding the current quarter.",
       "tests": [],
       "tags": []
     },
     {
       "name": "acquisition_cost_std",
       "type": "DOUBLE",
-      "description": "Rolling population standard deviation of Acquisition Cost calculated over the 3 quarters preceding the current quarter.",
+      "description": "The rolling population standard deviation of the acquisition cost over the 3 quarters preceding the current quarter.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -133,14 +135,14 @@
     {
       "name": "acquisition_cost_z",
       "type": "DOUBLE",
-      "description": "Z-score for the current quarter's average Acquisition Cost.",
+      "description": "The Z-score for the current quarter's average acquisition cost, indicating deviation from the rolling mean.",
       "tests": [],
       "tags": []
     },
     {
       "name": "acquisition_cost_anomaly",
       "type": "VARCHAR",
-      "description": "Flag indicating if the current quarter's average Acquisition Cost is an anomaly ('anomaly') or normal ('normal').",
+      "description": "Flag indicating if the acquisition cost for the current quarter is considered an anomaly ('anomaly' or 'normal') based on the Z-score threshold (>|2|).",
       "tests": [
         "not_null",
         "accepted_values"
@@ -150,7 +152,7 @@
     {
       "name": "total_clicks",
       "type": "HUGEINT",
-      "description": "Total number of clicks for the company-audience segment in the current quarter.",
+      "description": "The total number of clicks for this Company and Target Audience during the current quarter.",
       "tests": [
         "not_null",
         "dbt_utils.accepted_range"
@@ -160,14 +162,14 @@
     {
       "name": "clicks_mean",
       "type": "DOUBLE",
-      "description": "Rolling average total clicks calculated over the 3 quarters preceding the current quarter.",
+      "description": "The rolling average total clicks over the 3 quarters preceding the current quarter.",
       "tests": [],
       "tags": []
     },
     {
       "name": "clicks_std",
       "type": "DOUBLE",
-      "description": "Rolling population standard deviation of total clicks calculated over the 3 quarters preceding the current quarter.",
+      "description": "The rolling population standard deviation of total clicks over the 3 quarters preceding the current quarter.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -176,14 +178,14 @@
     {
       "name": "clicks_z",
       "type": "DOUBLE",
-      "description": "Z-score for the current quarter's total clicks.",
+      "description": "The Z-score for the current quarter's total clicks, indicating deviation from the rolling mean.",
       "tests": [],
       "tags": []
     },
     {
       "name": "clicks_anomaly",
       "type": "VARCHAR",
-      "description": "Flag indicating if the current quarter's total clicks is an anomaly ('anomaly') or normal ('normal').",
+      "description": "Flag indicating if the total clicks for the current quarter is considered an anomaly ('anomaly' or 'normal') based on the Z-score threshold (>|2|).",
       "tests": [
         "not_null",
         "accepted_values"
@@ -193,7 +195,7 @@
     {
       "name": "total_impressions",
       "type": "HUGEINT",
-      "description": "Total number of impressions for the company-audience segment in the current quarter.",
+      "description": "The total number of impressions for this Company and Target Audience during the current quarter.",
       "tests": [
         "not_null",
         "dbt_utils.accepted_range"
@@ -203,14 +205,14 @@
     {
       "name": "impressions_mean",
       "type": "DOUBLE",
-      "description": "Rolling average total impressions calculated over the 3 quarters preceding the current quarter.",
+      "description": "The rolling average total impressions over the 3 quarters preceding the current quarter.",
       "tests": [],
       "tags": []
     },
     {
       "name": "impressions_std",
       "type": "DOUBLE",
-      "description": "Rolling population standard deviation of total impressions calculated over the 3 quarters preceding the current quarter.",
+      "description": "The rolling population standard deviation of total impressions over the 3 quarters preceding the current quarter.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -219,14 +221,14 @@
     {
       "name": "impressions_z",
       "type": "DOUBLE",
-      "description": "Z-score for the current quarter's total impressions.",
+      "description": "The Z-score for the current quarter's total impressions, indicating deviation from the rolling mean.",
       "tests": [],
       "tags": []
     },
     {
       "name": "impressions_anomaly",
       "type": "VARCHAR",
-      "description": "Flag indicating if the current quarter's total impressions is an anomaly ('anomaly') or normal ('normal').",
+      "description": "Flag indicating if the total impressions for the current quarter is considered an anomaly ('anomaly' or 'normal') based on the Z-score threshold (>|2|).",
       "tests": [
         "not_null",
         "accepted_values"
@@ -236,8 +238,9 @@
     {
       "name": "quarterly_ctr",
       "type": "FLOAT",
-      "description": "Click-Through Rate (CTR) calculated for the company-audience segment over the entire current quarter (Total Clicks / Total Impressions).",
+      "description": "The calculated Click-Through Rate (CTR) for this Company and Target Audience during the current quarter (Total Clicks / Total Impressions).",
       "tests": [
+        "not_null",
         "dbt_utils.accepted_range"
       ],
       "tags": []
@@ -245,14 +248,14 @@
     {
       "name": "ctr_mean",
       "type": "DOUBLE",
-      "description": "Rolling average quarterly CTR calculated over the 3 quarters preceding the current quarter.",
+      "description": "The rolling average quarterly CTR over the 3 quarters preceding the current quarter.",
       "tests": [],
       "tags": []
     },
     {
       "name": "ctr_std",
       "type": "DOUBLE",
-      "description": "Rolling population standard deviation of quarterly CTR calculated over the 3 quarters preceding the current quarter.",
+      "description": "The rolling population standard deviation of the quarterly CTR over the 3 quarters preceding the current quarter.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -261,14 +264,14 @@
     {
       "name": "ctr_z",
       "type": "DOUBLE",
-      "description": "Z-score for the current quarter's CTR.",
+      "description": "The Z-score for the current quarter's CTR, indicating deviation from the rolling mean.",
       "tests": [],
       "tags": []
     },
     {
       "name": "ctr_anomaly",
       "type": "VARCHAR",
-      "description": "Flag indicating if the current quarter's CTR is an anomaly ('anomaly') or normal ('normal').",
+      "description": "Flag indicating if the CTR for the current quarter is considered an anomaly ('anomaly' or 'normal') based on the Z-score threshold (>|2|).",
       "tests": [
         "not_null",
         "accepted_values"
@@ -278,7 +281,7 @@
     {
       "name": "campaign_count",
       "type": "BIGINT",
-      "description": "Total number of distinct campaigns run for the company-audience segment in the current quarter.",
+      "description": "The distinct count of campaigns run for this Company and Target Audience during the current quarter.",
       "tests": [
         "not_null",
         "dbt_utils.accepted_range"
@@ -288,14 +291,14 @@
     {
       "name": "campaign_count_mean",
       "type": "DOUBLE",
-      "description": "Rolling average campaign count calculated over the 3 quarters preceding the current quarter.",
+      "description": "The rolling average campaign count over the 3 quarters preceding the current quarter.",
       "tests": [],
       "tags": []
     },
     {
       "name": "campaign_count_std",
       "type": "DOUBLE",
-      "description": "Rolling population standard deviation of campaign count calculated over the 3 quarters preceding the current quarter.",
+      "description": "The rolling population standard deviation of the campaign count over the 3 quarters preceding the current quarter.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -304,14 +307,14 @@
     {
       "name": "campaign_count_z",
       "type": "DOUBLE",
-      "description": "Z-score for the current quarter's campaign count.",
+      "description": "The Z-score for the current quarter's campaign count, indicating deviation from the rolling mean.",
       "tests": [],
       "tags": []
     },
     {
       "name": "campaign_count_anomaly",
       "type": "VARCHAR",
-      "description": "Flag indicating if the current quarter's campaign count is an anomaly ('anomaly') or normal ('normal').",
+      "description": "Flag indicating if the campaign count for the current quarter is considered an anomaly ('anomaly' or 'normal') based on the Z-score threshold (>|2|).",
       "tests": [
         "not_null",
         "accepted_values"
@@ -321,8 +324,9 @@
     {
       "name": "total_spend",
       "type": "DOUBLE",
-      "description": "Estimated total spend for the company-audience segment in the current quarter.",
+      "description": "The total spend (sum of Acquisition Cost) for this Company and Target Audience during the current quarter.",
       "tests": [
+        "not_null",
         "dbt_utils.accepted_range"
       ],
       "tags": []
@@ -330,14 +334,14 @@
     {
       "name": "spend_mean",
       "type": "DOUBLE",
-      "description": "Rolling average total spend calculated over the 3 quarters preceding the current quarter.",
+      "description": "The rolling average total spend over the 3 quarters preceding the current quarter.",
       "tests": [],
       "tags": []
     },
     {
       "name": "spend_std",
       "type": "DOUBLE",
-      "description": "Rolling population standard deviation of total spend calculated over the 3 quarters preceding the current quarter.",
+      "description": "The rolling population standard deviation of total spend over the 3 quarters preceding the current quarter.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -346,14 +350,14 @@
     {
       "name": "spend_z",
       "type": "DOUBLE",
-      "description": "Z-score for the current quarter's total spend.",
+      "description": "The Z-score for the current quarter's total spend, indicating deviation from the rolling mean.",
       "tests": [],
       "tags": []
     },
     {
       "name": "spend_anomaly",
       "type": "VARCHAR",
-      "description": "Flag indicating if the current quarter's total spend is an anomaly ('anomaly') or normal ('normal').",
+      "description": "Flag indicating if the total spend for the current quarter is considered an anomaly ('anomaly' or 'normal') based on the Z-score threshold (>|2|).",
       "tests": [
         "not_null",
         "accepted_values"
@@ -363,23 +367,23 @@
     {
       "name": "total_revenue",
       "type": "DOUBLE",
-      "description": "Estimated total revenue generated for the company-audience segment in the current quarter.",
+      "description": "The total calculated revenue (Spend * (1 + ROI)) for this Company and Target Audience during the current quarter.",
       "tests": [
-        "dbt_utils.accepted_range"
+        "not_null"
       ],
       "tags": []
     },
     {
       "name": "revenue_mean",
       "type": "DOUBLE",
-      "description": "Rolling average total revenue calculated over the 3 quarters preceding the current quarter.",
+      "description": "The rolling average total revenue over the 3 quarters preceding the current quarter.",
       "tests": [],
       "tags": []
     },
     {
       "name": "revenue_std",
       "type": "DOUBLE",
-      "description": "Rolling population standard deviation of total revenue calculated over the 3 quarters preceding the current quarter.",
+      "description": "The rolling population standard deviation of total revenue over the 3 quarters preceding the current quarter.",
       "tests": [
         "dbt_utils.accepted_range"
       ],
@@ -388,14 +392,14 @@
     {
       "name": "revenue_z",
       "type": "DOUBLE",
-      "description": "Z-score for the current quarter's total revenue.",
+      "description": "The Z-score for the current quarter's total revenue, indicating deviation from the rolling mean.",
       "tests": [],
       "tags": []
     },
     {
       "name": "revenue_anomaly",
       "type": "VARCHAR",
-      "description": "Flag indicating if the current quarter's total revenue is an anomaly ('anomaly') or normal ('normal').",
+      "description": "Flag indicating if the total revenue for the current quarter is considered an anomaly ('anomaly' or 'normal') based on the Z-score threshold (>|2|).",
       "tests": [
         "not_null",
         "accepted_values"
@@ -405,7 +409,7 @@
     {
       "name": "has_anomaly",
       "type": "BOOLEAN",
-      "description": "Boolean flag indicating TRUE if at least one metric for this company-audience segment in the current quarter is flagged as an anomaly.",
+      "description": "A boolean flag (TRUE/FALSE) indicating if *any* metric for this Company/Target Audience combination showed an anomaly in the current quarter.",
       "tests": [
         "not_null",
         "accepted_values"
@@ -415,7 +419,7 @@
     {
       "name": "anomaly_count",
       "type": "INTEGER",
-      "description": "The total number of individual metrics flagged as anomalies for this company-audience segment in the current quarter.",
+      "description": "The total number of metrics that were flagged as anomalies for this Company/Target Audience in the current quarter.",
       "tests": [
         "not_null",
         "dbt_utils.accepted_range"
@@ -425,7 +429,7 @@
     {
       "name": "anomaly_impact",
       "type": "VARCHAR",
-      "description": "Categorizes the overall impact of detected anomalies as 'positive' (e.g., unusually high ROI, low cost), 'negative' (e.g., unusually low ROI, high cost), or 'normal' if no significant anomalies are detected.",
+      "description": "Categorizes the overall impact of the detected anomalies as 'positive', 'negative', or 'normal'. 'Positive' indicates favorable deviations (e.g., high ROI, low cost), 'negative' indicates unfavorable deviations.",
       "tests": [
         "not_null",
         "accepted_values"
@@ -435,7 +439,7 @@
     {
       "name": "anomaly_description",
       "type": "VARCHAR",
-      "description": "A human-readable description summarizing the most prominent anomaly detected (based on the order of checks in the CASE statement), or NULL if no anomaly is detected.",
+      "description": "A text description summarizing the most significant anomaly detected (if any) for dashboard display. NULL if no anomaly is detected.",
       "tests": [],
       "tags": []
     }

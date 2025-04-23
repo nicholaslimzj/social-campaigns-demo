@@ -173,15 +173,8 @@ def cache_insight(company_name: str, insight_text: str, insight_type: str = 'com
         conn.commit()
         conn.close()
         
-        # Also save to a file for easy access
-        insights_dir = Path(__file__).parent.parent / "static" / "insights"
-        insights_dir.mkdir(parents=True, exist_ok=True)
-        
-        file_path = insights_dir / f"{company_name.replace(' ', '_').lower()}_insights.html"
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(insight_text)
-            
-        logger.info(f"Saved insight to file: {file_path}")
+        # Only save to database, no need to write to disk
+        logger.info(f"Saved insight for {company_name} to database")
     except Exception as e:
         logger.error(f"Error caching insight: {str(e)}")
     finally:
@@ -205,8 +198,10 @@ def fetch_company_metrics(company_name: str) -> Dict[str, Any]:
         metrics = conn.execute("""
         WITH current_metrics AS (
             SELECT 
-                AVG(roi_vs_prev_month) as current_roi,
-                AVG(conversion_rate_vs_prev_month) as current_conversion_rate,
+                AVG(avg_roi) as current_roi,
+                AVG(avg_conversion_rate) as current_conversion_rate,
+                AVG(roi_vs_prev_month) as current_roi_vs_prev_month,
+                AVG(conversion_rate_vs_prev_month) as current_conversion_rate_vs_prev_month,
                 SUM(total_revenue) as current_revenue,
                 MAX(month) as current_month
             FROM campaign_monthly_metrics
@@ -215,8 +210,10 @@ def fetch_company_metrics(company_name: str) -> Dict[str, Any]:
         ),
         previous_metrics AS (
             SELECT 
-                AVG(roi_vs_prev_month) as previous_roi,
-                AVG(conversion_rate_vs_prev_month) as previous_conversion_rate,
+                AVG(avg_roi) as previous_roi,
+                AVG(avg_conversion_rate) as previous_conversion_rate,
+                AVG(roi_vs_prev_month) as previous_roi_vs_prev_month,
+                AVG(conversion_rate_vs_prev_month) as previous_conversion_rate_vs_prev_month,
                 SUM(total_revenue) as previous_revenue,
                 MAX(month) as previous_month
             FROM campaign_monthly_metrics
@@ -238,7 +235,9 @@ def fetch_company_metrics(company_name: str) -> Dict[str, Any]:
             (cm.current_conversion_rate - pm.previous_conversion_rate) / NULLIF(pm.previous_conversion_rate, 0) * 100 as conversion_rate_change_pct,
             cm.current_revenue as current_revenue,
             pm.previous_revenue as previous_revenue,
-            (cm.current_revenue - pm.previous_revenue) / NULLIF(pm.previous_revenue, 0) * 100 as revenue_change_pct
+            (cm.current_revenue - pm.previous_revenue) / NULLIF(pm.previous_revenue, 0) * 100 as revenue_change_pct,
+            cm.current_roi_vs_prev_month,
+            cm.current_conversion_rate_vs_prev_month
         FROM current_metrics cm, previous_metrics pm
         """, [company_name, company_name, company_name, company_name, company_name]).fetchone()
         
@@ -256,7 +255,9 @@ def fetch_company_metrics(company_name: str) -> Dict[str, Any]:
             "previous_month": metrics[1],
             "roi_change_pct": metrics[4],
             "conversion_rate_change_pct": metrics[7],
-            "revenue_change_pct": metrics[10]
+            "revenue_change_pct": metrics[10],
+            "roi_vs_prev_month": metrics[11],
+            "conversion_rate_vs_prev_month": metrics[12]
         }
     except Exception as e:
         logger.error(f"Error fetching company metrics: {str(e)}")
@@ -290,7 +291,30 @@ def fetch_campaign_rankings(company_name: str) -> Dict[str, Any]:
         for metric_key, db_metric in metric_mapping.items():
             try:
                 query = f"""
-                SELECT *
+                SELECT 
+                    campaign_id,
+                    goal,
+                    channel,
+                    segment,
+                    roi,
+                    conversion_rate,
+                    spend,
+                    revenue,
+                    acquisition_cost,
+                    cpa,
+                    ctr,
+                    clicks,
+                    impressions,
+                    start_date,
+                    end_date,
+                    duration_days,
+                    roi_vs_company_avg,
+                    conversion_vs_company_avg,
+                    acquisition_efficiency,
+                    revenue_share,
+                    spend_share,
+                    performance_tier,
+                    recommended_action
                 FROM campaign_month_performance_rankings
                 WHERE Company = ?
                 AND is_top_{db_metric}_performer = TRUE
@@ -299,7 +323,19 @@ def fetch_campaign_rankings(company_name: str) -> Dict[str, Any]:
                 """
                 
                 results = conn.execute(query, [company_name]).fetchall()
-                top_performers[metric_key] = results
+                
+                # Get column names from the query
+                column_names = [desc[0] for desc in conn.description]
+                
+                # Convert results to list of dictionaries with named fields
+                formatted_results = []
+                for row in results:
+                    campaign_dict = {}
+                    for i, col_name in enumerate(column_names):
+                        campaign_dict[col_name] = row[i]
+                    formatted_results.append(campaign_dict)
+                    
+                top_performers[metric_key] = formatted_results
             except Exception as e:
                 logger.warning(f"Error fetching top performers for {metric_key}: {str(e)}")
                 top_performers[metric_key] = []
@@ -309,7 +345,30 @@ def fetch_campaign_rankings(company_name: str) -> Dict[str, Any]:
         for metric_key, db_metric in metric_mapping.items():
             try:
                 query = f"""
-                SELECT *
+                SELECT 
+                    campaign_id,
+                    goal,
+                    channel,
+                    segment,
+                    roi,
+                    conversion_rate,
+                    spend,
+                    revenue,
+                    acquisition_cost,
+                    cpa,
+                    ctr,
+                    clicks,
+                    impressions,
+                    start_date,
+                    end_date,
+                    duration_days,
+                    roi_vs_company_avg,
+                    conversion_vs_company_avg,
+                    acquisition_efficiency,
+                    revenue_share,
+                    spend_share,
+                    performance_tier,
+                    recommended_action
                 FROM campaign_month_performance_rankings
                 WHERE Company = ?
                 AND is_bottom_{db_metric}_performer = TRUE
@@ -318,7 +377,19 @@ def fetch_campaign_rankings(company_name: str) -> Dict[str, Any]:
                 """
                 
                 results = conn.execute(query, [company_name]).fetchall()
-                bottom_performers[metric_key] = results
+                
+                # Get column names from the query
+                column_names = [desc[0] for desc in conn.description]
+                
+                # Convert results to list of dictionaries with named fields
+                formatted_results = []
+                for row in results:
+                    campaign_dict = {}
+                    for i, col_name in enumerate(column_names):
+                        campaign_dict[col_name] = row[i]
+                    formatted_results.append(campaign_dict)
+                    
+                bottom_performers[metric_key] = formatted_results
             except Exception as e:
                 logger.warning(f"Error fetching bottom performers for {metric_key}: {str(e)}")
                 bottom_performers[metric_key] = []
@@ -404,7 +475,7 @@ def fetch_audience_insights(company_name: str) -> Dict[str, Any]:
         conn = get_analytics_connection()
         
         # Get top performing audiences
-        top_audiences = conn.execute("""
+        top_audiences_result = conn.execute("""
         SELECT 
             'Audience ' || ROW_NUMBER() OVER (ORDER BY response_rate DESC) as audience_name,
             response_rate,
@@ -416,8 +487,19 @@ def fetch_audience_insights(company_name: str) -> Dict[str, Any]:
         LIMIT 3
         """, [company_name]).fetchall()
         
+        # Get column names from the query
+        column_names = [desc[0] for desc in conn.description]
+        
+        # Convert results to list of dictionaries with named fields
+        top_audiences = []
+        for row in top_audiences_result:
+            audience_dict = {}
+            for i, col_name in enumerate(column_names):
+                audience_dict[col_name] = row[i]
+            top_audiences.append(audience_dict)
+        
         # Get audience anomalies
-        anomalies = conn.execute("""
+        anomalies_result = conn.execute("""
         SELECT 
             'Audience ' || ROW_NUMBER() OVER (ORDER BY ABS(revenue_z) DESC) as Audience,
             'revenue' as metric,
@@ -430,6 +512,17 @@ def fetch_audience_insights(company_name: str) -> Dict[str, Any]:
         ORDER BY ABS(revenue_z) DESC
         LIMIT 3
         """, [company_name]).fetchall()
+        
+        # Get column names from the query
+        column_names = [desc[0] for desc in conn.description]
+        
+        # Convert results to list of dictionaries with named fields
+        anomalies = []
+        for row in anomalies_result:
+            anomaly_dict = {}
+            for i, col_name in enumerate(column_names):
+                anomaly_dict[col_name] = row[i]
+            anomalies.append(anomaly_dict)
         
         return {
             "top_audiences": top_audiences,
@@ -456,7 +549,7 @@ def fetch_campaign_duration_insights(company_name: str) -> Dict[str, Any]:
         conn = get_analytics_connection()
         
         # Get optimal durations by dimension
-        optimal_durations = conn.execute("""
+        optimal_durations_result = conn.execute("""
         SELECT 
             dimension,
             optimal_duration_range,
@@ -468,8 +561,19 @@ def fetch_campaign_duration_insights(company_name: str) -> Dict[str, Any]:
         LIMIT 5
         """, [company_name]).fetchall()
         
+        # Get column names from the query
+        column_names = [desc[0] for desc in conn.description]
+        
+        # Convert results to list of dictionaries with named fields
+        optimal_durations = []
+        for row in optimal_durations_result:
+            duration_dict = {}
+            for i, col_name in enumerate(column_names):
+                duration_dict[col_name] = row[i]
+            optimal_durations.append(duration_dict)
+        
         # Get overall optimal duration
-        overall = conn.execute("""
+        overall_result = conn.execute("""
         SELECT 
             optimal_duration_range,
             optimal_conversion_rate
@@ -478,10 +582,14 @@ def fetch_campaign_duration_insights(company_name: str) -> Dict[str, Any]:
         LIMIT 1
         """, [company_name]).fetchone()
         
+        # Extract values from the overall result
+        overall_optimal_duration = overall_result[0] if overall_result else None
+        overall_roi_impact = overall_result[1] if overall_result else None
+        
         return {
             "optimal_durations": optimal_durations,
-            "overall_optimal_duration": overall[0] if overall else None,
-            "overall_roi_impact": overall[1] if overall else None
+            "overall_optimal_duration": overall_optimal_duration,
+            "overall_roi_impact": overall_roi_impact
         }
     except Exception as e:
         logger.error(f"Error fetching campaign duration insights: {str(e)}")
@@ -504,7 +612,7 @@ def fetch_campaign_clusters(company_name: str) -> Dict[str, Any]:
         conn = get_analytics_connection()
         
         # Get high ROI clusters
-        high_roi = conn.execute("""
+        high_roi_result = conn.execute("""
         SELECT 
             segment,
             min_duration,
@@ -518,8 +626,19 @@ def fetch_campaign_clusters(company_name: str) -> Dict[str, Any]:
         LIMIT 3
         """, [company_name]).fetchall()
         
+        # Get column names from the query
+        column_names = [desc[0] for desc in conn.description]
+        
+        # Convert results to list of dictionaries with named fields
+        high_roi = []
+        for row in high_roi_result:
+            cluster_dict = {}
+            for i, col_name in enumerate(column_names):
+                cluster_dict[col_name] = row[i]
+            high_roi.append(cluster_dict)
+        
         # Get high conversion clusters
-        high_conversion = conn.execute("""
+        high_conversion_result = conn.execute("""
         SELECT 
             segment,
             min_duration,
@@ -533,13 +652,24 @@ def fetch_campaign_clusters(company_name: str) -> Dict[str, Any]:
         LIMIT 3
         """, [company_name]).fetchall()
         
+        # Get column names from the query
+        column_names = [desc[0] for desc in conn.description]
+        
+        # Convert results to list of dictionaries with named fields
+        high_conversion = []
+        for row in high_conversion_result:
+            cluster_dict = {}
+            for i, col_name in enumerate(column_names):
+                cluster_dict[col_name] = row[i]
+            high_conversion.append(cluster_dict)
+        
         return {
             "high_roi": high_roi,
-            "high_conversion": high_conversion
+            "roi_clusters": high_conversion
         }
     except Exception as e:
         logger.error(f"Error fetching campaign clusters: {str(e)}")
-        return {"high_roi": [], "high_conversion": []}
+        return {"high_roi": [], "roi_clusters": []}
     finally:
         if 'conn' in locals():
             conn.close()
@@ -616,8 +746,8 @@ class InsightsGenerator:
             # Convert to JSON for LLM
             data_json = json.dumps(data, cls=CustomJSONEncoder)
             
-            # Log the data being sent to the LLM for debugging
-            logger.info(f"Data for {company_name} insights generation: {data_json}")
+            # Log minimal info about the data being sent to the LLM for debugging
+            logger.info(f"Preparing data for {company_name} insights generation")
             
             # Save the data to a debug file for inspection
             debug_dir = Path("/data/debug")
@@ -648,14 +778,14 @@ class InsightsGenerator:
             
             
             
-            # Log the prompt being sent to the LLM
-            logger.info(f"Prompt for {company_name} insights generation:\n{prompt}")
+            # Log minimal info about the prompt being sent to the LLM
+            logger.info(f"Sending prompt for {company_name} insights generation")
             
             # Generate insight using LLM directly
             llm_response = self.llm.invoke(prompt)
             
-            # Log the raw response from the LLM
-            logger.info(f"Raw LLM response for {company_name}:\n{llm_response}")
+            # Log minimal info about the response from the LLM
+            logger.info(f"Received LLM response for {company_name}")
             
             # Extract the content from the AIMessage object
             if hasattr(llm_response, 'content'):

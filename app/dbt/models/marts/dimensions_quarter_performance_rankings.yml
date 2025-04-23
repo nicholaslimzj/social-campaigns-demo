@@ -4,27 +4,21 @@ models:
   - name: dimensions_quarter_performance_rankings
     description: |
       Ranks entities (companies, channels, segments, target audiences) within their respective dimensions based on key performance metrics (Conversion Rate, ROI, Acquisition Cost, CTR) for the most recent quarter.
-      Calculates quarter-over-quarter (QoQ) changes and identifies performance trends (improved/declined/unchanged).
-      The 'current quarter' is defined as the last 3 months of available data in the source, and the 'previous quarter' is the 3 months preceding that.
-      This model unpivots the metrics for easier analysis and dashboard integration.
-      Built from `stg_campaigns`.
+      Calculates quarter-over-quarter (QoQ) changes compared to the previous quarter and identifies performance trends.
+      This model aggregates data from `stg_campaigns` over the last 3 months (current quarter) and the 3 months prior (previous quarter).
+      The output is unpivoted, with one row per dimension-entity-metric combination.
+      Used in Performance Rankings dashboards and QoQ comparison analyses.
     config:
       materialized: table
-      tags:
-        - 'mart'
-        - 'performance'
-        - 'ranking'
-        - 'quarterly'
-        - 'comparison'
+      tags: ['mart', 'performance', 'ranking', 'quarterly']
     columns:
       - name: dimension
-        description: "The dimension being analyzed (e.g., 'company', 'channel', 'segment', 'audience')."
-        data_type: VARCHAR
+        description: "The category of the entity being ranked (e.g., 'company', 'channel', 'segment', 'audience')."
         tests:
           - not_null
           - accepted_values:
               values: ['company', 'channel', 'segment', 'audience']
-          # Primary key definition using unique combination
+          # Test for the multi-column unique key
           - dbt_utils.unique_combination_of_columns:
               combination_of_columns:
                 - dimension
@@ -32,103 +26,112 @@ models:
                 - metric
 
       - name: entity
-        description: "The specific entity within the dimension being ranked (e.g., a specific company name, channel name, segment name, or audience group)."
-        data_type: VARCHAR
+        description: "The specific item being ranked within the dimension (e.g., 'Acme Corp', 'Social Media', 'High Value Customers', 'Men 18-24'). Derived from Company, Channel_Used, Customer_Segment, or Target_Audience in stg_campaigns."
         tests:
           - not_null
 
       - name: metric
-        description: "The performance metric being measured (e.g., 'conversion_rate', 'roi', 'acquisition_cost', 'ctr')."
-        data_type: VARCHAR
+        description: "The performance metric being measured and ranked (e.g., 'conversion_rate', 'roi', 'acquisition_cost', 'ctr')."
         tests:
           - not_null
           - accepted_values:
               values: ['conversion_rate', 'roi', 'acquisition_cost', 'ctr']
 
       - name: metric_value
-        description: "The calculated value of the metric for the entity in the current quarter."
-        data_type: DOUBLE
+        description: "The calculated value of the metric for the entity in the current quarter (last 3 months)."
         tests:
           - not_null
-          # Basic non-negativity check where applicable (ROI can be negative)
-          - dbt_expectations.expect_column_values_to_be_non_negative:
-              where: "metric != 'roi'"
+          # Basic non-negativity check where applicable (e.g. cost, rate, count-based metrics)
+          # ROI can be negative, so no generic non-negative test here.
+          # Specific range test for CTR
+          - dbt_utils.accepted_range:
+              min_value: 0
+              # Max value for CTR can be higher than 1 if calculated differently, but typically 0-1 range. Assuming 0-1 based on Clicks/Impressions.
+              # max_value: 1 # Optional: Add max_value if CTR is strictly <= 1
+              where: "metric = 'ctr'"
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "metric = 'acquisition_cost'"
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "metric = 'conversion_rate'"
+
 
       - name: metric_rank
-        description: "The rank of the entity within its dimension for the specific metric in the current quarter. Lower rank is better for acquisition_cost, higher rank is better for others."
-        data_type: BIGINT
+        description: "The rank of the entity within its dimension based on the metric value for the current quarter. Lower rank is better for acquisition_cost, higher rank is better for others."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_between:
+          - dbt_utils.accepted_range:
               min_value: 1
-              # Max value could theoretically be tested against total_entities, but simple >= 1 is robust.
 
       - name: total_entities
         description: "The total number of unique entities within the dimension for the current quarter."
-        data_type: BIGINT
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_between:
+          - dbt_utils.accepted_range:
               min_value: 1
 
       - name: campaign_count
-        description: "The number of campaigns associated with this entity within the dimension during the current quarter."
-        data_type: BIGINT
+        description: "The number of campaigns associated with this entity in the current quarter."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 1
+          - dbt_utils.accepted_range:
+              min_value: 1 # Assuming an entity must have at least one campaign to appear
 
       - name: prev_metric_value
         description: "The calculated value of the metric for the entity in the previous quarter. NULL if no data exists for the previous quarter."
-        data_type: DOUBLE
         # No not_null test as previous data might not exist
+        tests:
+          # Apply similar range tests as metric_value, but only where the value is not null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "metric = 'ctr' AND prev_metric_value IS NOT NULL"
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "metric = 'acquisition_cost' AND prev_metric_value IS NOT NULL"
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "metric = 'conversion_rate' AND prev_metric_value IS NOT NULL"
 
       - name: metric_qoq_change
-        description: "The percentage change in the metric value from the previous quarter to the current quarter. Calculated as (current - previous) / previous, except for acquisition cost where improvement is negative change. NULL if no previous data."
-        data_type: DOUBLE
+        description: "The percentage change in the metric value from the previous quarter to the current quarter ((current - previous) / previous). NULL if no previous quarter data. Note: For acquisition_cost, a positive value indicates worsening performance, while negative indicates improvement."
         # No not_null test as previous data might not exist
 
       - name: trend
-        description: "Indicates the performance trend based on the QoQ change ('improved', 'declined', 'unchanged', 'no_previous_data'). Note: 'improved' for acquisition_cost means the value decreased."
-        data_type: VARCHAR
+        description: "Indicates the performance trend based on the QoQ change ('improved', 'declined', 'unchanged', 'no_previous_data'). Takes into account whether higher or lower is better for the specific metric."
         tests:
           - not_null
           - accepted_values:
               values: ['improved', 'declined', 'unchanged', 'no_previous_data']
 
       - name: current_window_start_month
-        description: "The starting month number (1-12) of the current 3-month analysis window."
-        data_type: BIGINT
+        description: "The starting month number (1-12) of the current quarter window used for calculations."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_between:
+          - dbt_utils.accepted_range:
               min_value: 1
               max_value: 12
 
       - name: current_window_end_month
-        description: "The ending month number (1-12) of the current 3-month analysis window."
-        data_type: BIGINT
+        description: "The ending month number (1-12) of the current quarter window used for calculations."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_between:
+          - dbt_utils.accepted_range:
               min_value: 1
               max_value: 12
 
       - name: previous_window_start_month
-        description: "The starting month number (1-12) of the previous 3-month analysis window used for comparison."
-        data_type: BIGINT
+        description: "The starting month number (1-12) of the previous quarter window used for comparison."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: -2 # Can be negative if current window starts early in the year
-              max_value: 9
+          - dbt_utils.accepted_range:
+              min_value: 1 # Technically could be negative if year wraps, but likely represents month number
+              max_value: 12 # Adjust range if year wrapping logic makes months outside 1-12 possible
 
       - name: previous_window_end_month
-        description: "The ending month number (1-12) of the previous 3-month analysis window used for comparison."
-        data_type: BIGINT
+        description: "The ending month number (1-12) of the previous quarter window used for comparison."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 1
-              max_value: 12
+          - dbt_utils.accepted_range:
+              min_value: 1 # Technically could be negative if year wraps, but likely represents month number
+              max_value: 12 # Adjust range if year wrapping logic makes months outside 1-12 possible

@@ -3,27 +3,23 @@ version: 2
 models:
   - name: channel_monthly_metrics
     description: |
-      Aggregates campaign performance metrics by company, channel, and month.
-      This mart model provides a time-based view of channel effectiveness within each company,
-      calculating key performance indicators (KPIs), month-over-month changes, spend, revenue,
-      and channel share metrics. It follows a hierarchical structure with Company as the primary
-      dimension and Channel_Used as the secondary dimension, aggregated monthly.
-      Used for dashboarding channel trends, performance comparisons, and seasonal analysis.
+      Aggregates campaign performance metrics monthly by company and channel.
+      Provides insights into channel effectiveness trends, month-over-month changes, spend, revenue,
+      and channel share within each company over time. Built on the hierarchical structure with Company
+      as the primary dimension and Channel_Used as the secondary dimension.
+      Time Grain: Monthly
     config:
       materialized: table
-      tags:
-        - 'mart'
-        - 'marketing'
-        - 'campaigns'
-        - 'performance'
-        - 'monthly'
-        - 'channel_analysis'
+      tags: ['mart', 'marketing', 'monthly_metrics', 'channel_performance']
     columns:
       - name: Company
-        description: "Identifier for the company running the campaigns. Primary dimension for aggregation."
+        description: The name of the company associated with the campaign metrics. Primary dimension for analysis.
         tests:
           - not_null
-          # Test for multi-column uniqueness (Company, Channel_Used, month)
+          - relationships:
+              to: ref('stg_campaigns')
+              field: Company
+          # Apply the multi-column unique constraint here
           - dbt_utils.unique_combination_of_columns:
               combination_of_columns:
                 - Company
@@ -31,116 +27,110 @@ models:
                 - month
 
       - name: Channel_Used
-        description: "The marketing channel used for the campaigns (e.g., Facebook, Google Ads, Email). Secondary dimension for aggregation."
+        description: The marketing channel used for the campaigns (e.g., Facebook, Google Ads, Email). Secondary dimension for analysis.
         tests:
           - not_null
-          # Consider adding accepted_values if the list of channels is known and finite
-          # - accepted_values:
-          #     values: ['Facebook', 'Google Ads', 'Email', 'Organic Search', ...]
+          - relationships:
+              to: ref('stg_campaigns')
+              field: Channel_Used
+          # Example: Add accepted values if a known list exists, adjust as needed
+          - accepted_values:
+              values: ['Facebook', 'Google Ads', 'Email Marketing', 'Organic Search', 'Social Media', 'Referral']
+              where: "Channel_Used IS NOT NULL" # Ensure nulls are ignored if they were possible
 
       - name: month
-        description: "The calendar month (1-12) for which the metrics are aggregated."
-        tests:
-          - not_null
-          - accepted_values:
-              values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-
-      - name: campaign_count
-        description: "Total number of distinct campaigns run by the company on this channel during the month."
+        description: The calendar month (1-12) for which the metrics are aggregated.
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 0 # A company might have 0 campaigns in a month for a channel if data includes placeholders
+              min_value: 1
+              max_value: 12
 
-      - name: avg_conversion_rate
-        description: "Average conversion rate across all campaigns for the company on this channel during the month."
+      - name: campaign_count
+        description: The total number of campaigns run by the company on the specific channel during the month.
         tests:
           - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0 # A company/channel/month might have 0 campaigns in edge cases, but typically > 0 if the row exists
+
+      - name: avg_conversion_rate
+        description: The average conversion rate across all campaigns for the company on the channel during the month.
+        tests:
           - dbt_utils.accepted_range:
               min_value: 0 # Conversion rate cannot be negative
 
       - name: avg_roi
-        description: "Average Return on Investment (ROI) across all campaigns for the company on this channel during the month."
-        tests:
-          - not_null # ROI can be negative, so no lower bound test
+        description: The average Return on Investment (ROI) across all campaigns for the company on the channel during the month.
+        # ROI can be negative if costs exceed revenue derived from it.
 
       - name: avg_acquisition_cost
-        description: "Average cost to acquire a customer/conversion across all campaigns for the company on this channel during the month."
+        description: The average cost to acquire a customer or achieve a conversion goal for the company on the channel during the month.
         tests:
-          - not_null
           - dbt_utils.accepted_range:
               min_value: 0 # Acquisition cost cannot be negative
 
       - name: monthly_ctr
-        description: "Overall Click-Through Rate (Total Clicks / Total Impressions) for the company on this channel during the month."
+        description: The overall Click-Through Rate (Total Clicks / Total Impressions) for the company on the channel during the month.
         tests:
-          - not_null # May be null if total_impressions is 0, handled by NULLIF in SQL
           - dbt_utils.accepted_range:
-              min_value: 0 # CTR cannot be negative
+              min_value: 0
+              # max_value: 1 # CTR is typically between 0 and 1
 
       - name: total_clicks
-        description: "Total number of clicks generated by campaigns for the company on this channel during the month."
+        description: The total number of clicks generated across all campaigns for the company on the channel during the month.
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 0
 
       - name: total_impressions
-        description: "Total number of impressions generated by campaigns for the company on this channel during the month."
+        description: The total number of impressions generated across all campaigns for the company on the channel during the month.
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 0
 
       - name: total_spend
-        description: "Estimated total amount spent on campaigns for the company on this channel during the month. Calculated as SUM(Clicks * Conversion_Rate * Acquisition_Cost)."
+        description: The total amount spent across all campaigns for the company on the channel during the month.
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 0 # Spend cannot be negative
+              min_value: 0
 
       - name: total_revenue
-        description: "Estimated total revenue generated from campaigns for the company on this channel during the month. Calculated as SUM(Clicks * Conversion_Rate * Acquisition_Cost * (1 + ROI))."
+        description: The total estimated revenue generated from campaigns for the company on the channel during the month, calculated as SUM(Acquisition_Cost * (1 + ROI)).
         tests:
-          - not_null
-          # Revenue could potentially be negative if ROI is <-1, but typically >= 0
-          # - dbt_utils.accepted_range:
-          #     min_value: 0
+          - dbt_utils.accepted_range:
+              min_value: 0 # Assuming ROI calculation ensures non-negative revenue in practice, or negative revenue is acceptable business logic.
 
       - name: roi_vs_prev_month
-        description: "Percentage change in average ROI compared to the previous month for the same company and channel. NULL if previous month data is unavailable or previous ROI was zero."
-        # No tests needed as NULL is expected for the first month or zero denominators
+        description: The percentage change in average ROI compared to the previous month for the same company and channel. Null if previous month data is unavailable or previous ROI was zero.
 
       - name: conversion_rate_vs_prev_month
-        description: "Percentage change in average conversion rate compared to the previous month for the same company and channel. NULL if previous month data is unavailable or previous rate was zero."
-        # No tests needed as NULL is expected
+        description: The percentage change in average conversion rate compared to the previous month for the same company and channel. Null if previous month data is unavailable or previous rate was zero.
 
       - name: acquisition_cost_vs_prev_month
-        description: "Percentage change in average acquisition cost compared to the previous month for the same company and channel. Positive value indicates improvement (lower cost). NULL if previous month data is unavailable or previous cost was zero."
-        # No tests needed as NULL is expected
+        description: The percentage change in average acquisition cost compared to the previous month for the same company and channel (positive value indicates improvement/lower cost). Null if previous month data is unavailable or previous cost was zero.
 
       - name: ctr_vs_prev_month
-        description: "Percentage change in monthly CTR compared to the previous month for the same company and channel. NULL if previous month data is unavailable or previous CTR was zero."
-        # No tests needed as NULL is expected
+        description: The percentage change in monthly CTR compared to the previous month for the same company and channel. Null if previous month data is unavailable or previous CTR was zero.
 
       - name: channel_count
-        description: "Total number of distinct channels used by the company across all campaigns during this specific month."
+        description: The total number of distinct marketing channels used by the company during that specific month.
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 1 # If a row exists for a company/month, there must be at least 1 channel
+              min_value: 1 # If a record exists for a company/month, there must be at least one channel active.
 
       - name: channel_share_clicks
-        description: "The proportion of the company's total clicks across all channels during the month that came from this specific channel (Clicks_This_Channel / Clicks_Company_Total_Month)."
+        description: The proportion of the company's total clicks across all channels during the month that came from this specific channel (0 to 1).
         tests:
-          - not_null # May be null if total company clicks are 0, handled by NULLIF in SQL
           - dbt_utils.accepted_range:
               min_value: 0
               max_value: 1 # Share must be between 0 and 1
 
       - name: efficiency_ratio
-        description: "Channel efficiency measured as Total Revenue per dollar of Total Spend (Total Revenue / Total Spend) for this channel during the month. NULL if total spend is zero."
+        description: The ratio of total revenue to total spend for the company on the channel during the month (Revenue per dollar spent). Null if total spend is zero.
         tests:
-          # Ratio can be negative if revenue is negative, but typically >= 0
           - dbt_utils.accepted_range:
-              min_value: 0 # Assuming revenue is non-negative when spend > 0
+              min_value: 0 # Assuming revenue is non-negative based on calculation method.

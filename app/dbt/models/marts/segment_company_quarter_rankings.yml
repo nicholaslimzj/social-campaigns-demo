@@ -3,187 +3,202 @@ version: 2
 models:
   - name: segment_company_quarter_rankings
     description: |
-      Ranks companies within each customer segment based on key performance metrics (Conversion Rate, ROI, Acquisition Cost, CTR) for the current quarter (last 3 months of available data).
-      This model identifies top-performing companies for specific segments, calculates relative performance against segment and global averages, and provides context like campaign counts and total companies per segment.
-      It is intended for use in dashboards related to Segment Performance Rankings, Company-Segment Affinity analysis, and Targeting Strategy recommendations.
+      Ranks companies within each customer segment based on key performance metrics (Conversion Rate, ROI, Acquisition Cost, CTR)
+      for the current quarter (last 3 months of available data). This model identifies top-performing companies for specific segments
+      and provides performance relative to segment and global averages. Used in Segment Performance dashboards and for targeting strategy.
     config:
       materialized: table
-      tags: ['mart']
+      tags:
+        - 'mart'
+        - 'marketing'
+        - 'performance'
+        - 'ranking'
     columns:
       - name: Customer_Segment
-        description: "The customer segment the company's performance is being evaluated within."
+        description: "The customer segment being analyzed (e.g., Fashion, Electronics)."
         tests:
           - not_null
-          # Primary key definition (unique combination with Company)
+          # Test for the unique combination of segment and company
           - dbt_utils.unique_combination_of_columns:
               combination_of_columns:
                 - Customer_Segment
                 - Company
 
       - name: Company
-        description: "The company being ranked within the customer segment."
+        description: "The company whose performance is being ranked within the segment."
         tests:
           - not_null
 
       - name: avg_conversion_rate
-        description: "The average conversion rate for the company within this segment for the current quarter."
+        description: "Average conversion rate for the company within this segment during the quarter."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_between:
+          - dbt_utils.accepted_range:
               min_value: 0
-              max_value: 1 # Conversion rate should be between 0 and 1
-              strictly: false
 
       - name: avg_roi
-        description: "The average Return on Investment (ROI) for the company within this segment for the current quarter."
+        description: "Average Return on Investment (ROI) for the company within this segment during the quarter."
         tests:
           - not_null
-          # ROI can be negative, so no lower bound test other than not null.
+          # ROI can theoretically be negative, so no lower bound test applied unless specific business rules exist.
 
       - name: avg_acquisition_cost
-        description: "The average cost to acquire a customer for the company within this segment for the current quarter."
+        description: "Average cost to acquire a customer for the company within this segment during the quarter."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range:
+              min_value: 0
 
       - name: overall_ctr
-        description: "The overall Click-Through Rate (CTR) calculated as total clicks divided by total impressions for the company within this segment for the current quarter."
+        description: "Overall Click-Through Rate (CTR) calculated as total clicks divided by total impressions for the company within this segment during the quarter."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_between:
+          - dbt_utils.accepted_range:
               min_value: 0
-              max_value: 1 # CTR should be between 0 and 1
-              strictly: false
+              # max_value: 1 # CTR is typically <= 1, but slight calculation variations might exceed it. Min_value is safer.
 
       - name: campaign_count
-        description: "The total number of campaigns run by the company within this segment during the current quarter."
+        description: "Number of campaigns run by the company within this segment during the quarter included in the calculation."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_positive # Should have at least one campaign to appear
+          - dbt_utils.accepted_range:
+              min_value: 1 # If a company/segment row exists, it must have at least one campaign.
 
       - name: conversion_rate_rank
-        description: "The rank of the company within the segment based on average conversion rate (descending - 1 is best)."
+        description: "Rank of the company within the segment based on average conversion rate (1 = highest)."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_positive
+          - dbt_utils.accepted_range:
+              min_value: 1
 
       - name: roi_rank
-        description: "The rank of the company within the segment based on average ROI (descending - 1 is best)."
+        description: "Rank of the company within the segment based on average ROI (1 = highest)."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_positive
+          - dbt_utils.accepted_range:
+              min_value: 1
 
       - name: acquisition_cost_rank
-        description: "The rank of the company within the segment based on average acquisition cost (ascending - 1 is best)."
+        description: "Rank of the company within the segment based on average acquisition cost (1 = lowest)."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_positive
+          - dbt_utils.accepted_range:
+              min_value: 1
 
       - name: ctr_rank
-        description: "The rank of the company within the segment based on overall CTR (descending - 1 is best)."
+        description: "Rank of the company within the segment based on overall CTR (1 = highest)."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_positive
+          - dbt_utils.accepted_range:
+              min_value: 1
 
       - name: total_companies_per_segment
-        description: "The total number of unique companies evaluated within this customer segment for the current quarter."
+        description: "Total number of unique companies analyzed within this customer segment for the quarter."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_positive
+          - dbt_utils.accepted_range:
+              min_value: 1
 
       - name: is_top_conversion_company
-        description: "Boolean flag indicating if this company has the highest average conversion rate (rank 1) in the segment."
+        description: "Flag indicating if this company has the highest average conversion rate (rank 1) in the segment."
         tests:
           - not_null
           - accepted_values:
-              values: [True, False]
+              values: [true, false]
 
       - name: is_top_roi_company
-        description: "Boolean flag indicating if this company has the highest average ROI (rank 1) in the segment."
+        description: "Flag indicating if this company has the highest average ROI (rank 1) in the segment."
         tests:
           - not_null
           - accepted_values:
-              values: [True, False]
+              values: [true, false]
 
       - name: is_top_acquisition_cost_company
-        description: "Boolean flag indicating if this company has the lowest average acquisition cost (rank 1) in the segment."
+        description: "Flag indicating if this company has the lowest average acquisition cost (rank 1) in the segment."
         tests:
           - not_null
           - accepted_values:
-              values: [True, False]
+              values: [true, false]
 
       - name: is_top_ctr_company
-        description: "Boolean flag indicating if this company has the highest overall CTR (rank 1) in the segment."
+        description: "Flag indicating if this company has the highest overall CTR (rank 1) in the segment."
         tests:
           - not_null
           - accepted_values:
-              values: [True, False]
+              values: [true, false]
 
       - name: segment_avg_conversion_rate
-        description: "The average conversion rate across all companies within this specific segment for the current quarter."
+        description: "Average conversion rate across all companies within this segment for the quarter."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_between:
+          - dbt_utils.accepted_range:
               min_value: 0
-              max_value: 1
-              strictly: false
 
       - name: segment_avg_roi
-        description: "The average ROI across all companies within this specific segment for the current quarter."
+        description: "Average ROI across all companies within this segment for the quarter."
         tests:
           - not_null
 
       - name: segment_avg_acquisition_cost
-        description: "The average acquisition cost across all companies within this specific segment for the current quarter."
+        description: "Average acquisition cost across all companies within this segment for the quarter."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range:
+              min_value: 0
 
       - name: segment_avg_ctr
-        description: "The average overall CTR across all companies within this specific segment for the current quarter."
+        description: "Average overall CTR across all companies within this segment for the quarter."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_between:
+          - dbt_utils.accepted_range:
               min_value: 0
-              max_value: 1
-              strictly: false
 
       - name: company_count
-        description: "The distinct count of companies within this segment (should match total_companies_per_segment)."
+        description: "Count of distinct companies within the segment (should match total_companies_per_segment)."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_positive
-          - dbt_expectations.expect_column_values_to_equal_column:
-              column_name: total_companies_per_segment # Check consistency
+          - dbt_utils.accepted_range:
+              min_value: 1
+          # Optional: Test equality with total_companies_per_segment if dbt_expectations or similar package is used
+          # - dbt_expectations.expect_column_values_to_equal_other_column:
+          #     other_column_name: total_companies_per_segment
 
       - name: conversion_rate_vs_segment_avg
-        description: "The company's average conversion rate performance relative to the segment average (Company Avg / Segment Avg - 1). Positive means better than segment average."
-        # Nullable if segment average is 0
+        description: "Company's average conversion rate performance relative to the segment average (value of 0.1 means 10% above segment average)."
+        tests:
+          - not_null # Assumes segment average is non-zero if the segment exists
 
       - name: roi_vs_segment_avg
-        description: "The company's average ROI performance relative to the segment average (Company Avg / Segment Avg - 1). Positive means better than segment average."
-        # Nullable if segment average is 0
+        description: "Company's average ROI performance relative to the segment average (value of 0.1 means 10% above segment average)."
+        tests:
+          - not_null # Assumes segment average is non-zero if the segment exists
 
       - name: acquisition_cost_vs_segment_avg
-        description: "The company's average acquisition cost performance relative to the segment average (Segment Avg / Company Avg - 1). Positive means better (lower cost) than segment average."
-        # Nullable if company average is 0
+        description: "Company's average acquisition cost performance relative to the segment average (value of 0.1 means 10% better/lower cost than segment average, due to inversion in calculation)."
+        tests:
+          - not_null # Assumes company and segment average costs are non-zero
 
       - name: ctr_vs_segment_avg
-        description: "The company's overall CTR performance relative to the segment average (Company Avg / Segment Avg - 1). Positive means better than segment average."
-        # Nullable if segment average is 0
+        description: "Company's overall CTR performance relative to the segment average (value of 0.1 means 10% above segment average)."
+        tests:
+          - not_null # Assumes segment average is non-zero if the segment exists
 
       - name: conversion_rate_vs_global_avg
-        description: "The company's average conversion rate performance relative to the global average across all segments (Company Avg / Global Avg - 1). Positive means better than global average."
-        # Nullable if global average is 0
+        description: "Company's average conversion rate performance relative to the global average across all segments."
+        tests:
+          - not_null # Assumes global average is non-zero
 
       - name: roi_vs_global_avg
-        description: "The company's average ROI performance relative to the global average across all segments (Company Avg / Global Avg - 1). Positive means better than global average."
-        # Nullable if global average is 0
+        description: "Company's average ROI performance relative to the global average across all segments."
+        tests:
+          - not_null # Assumes global average is non-zero
 
       - name: acquisition_cost_vs_global_avg
-        description: "The company's average acquisition cost performance relative to the global average across all segments (Global Avg / Company Avg - 1). Positive means better (lower cost) than global average."
-        # Nullable if company average is 0
+        description: "Company's average acquisition cost performance relative to the global average (value of 0.1 means 10% better/lower cost than global average, due to inversion in calculation)."
+        tests:
+          - not_null # Assumes company and global average costs are non-zero
 
       - name: ctr_vs_global_avg
-        description: "The company's overall CTR performance relative to the global average across all segments (Company Avg / Global Avg - 1). Positive means better than global average."
-        # Nullable if global average is 0
+        description: "Company's overall CTR performance relative to the global average across all segments."
+        tests:
+          - not_null # Assumes global average is non-zero

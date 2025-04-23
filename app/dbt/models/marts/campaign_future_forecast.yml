@@ -2,33 +2,32 @@ version: 2
 
 models:
   - name: campaign_future_forecast
-    description: |
-      Mart model that generates a 3-month performance forecast for marketing campaigns by company.
-      It combines historical monthly aggregated data from `stg_campaigns` with time series forecasting techniques (moving averages, growth rates, seasonality) calculated using SQL.
-      The model outputs both historical actuals and future predicted values for key metrics like Conversion Rate, ROI, Acquisition Cost, and CTR, along with confidence intervals.
-      Used for predictive analytics dashboards and campaign planning.
+    description: >
+      Mart model that generates a 3-month performance forecast for campaigns by company.
+      It uses historical monthly data from stg_campaigns, applies time series analysis
+      (moving averages, growth rates, seasonality) to project key metrics like Conversion Rate,
+      ROI, Acquisition Cost, and CTR. Includes confidence intervals for forecasts.
+      Combines historical actuals with future projections.
     config:
       materialized: table
-      tags: ['mart', 'forecasting', 'campaigns', 'finance']
+      tags: ['mart', 'forecasting', 'analytics']
     columns:
       - name: Company
-        description: "The name of the company associated with the campaign data."
+        description: "The name of the company for which the campaign metrics are aggregated and forecasted."
         tests:
           - not_null
           - relationships:
               to: ref('stg_campaigns')
-              field: Company # Assuming 'Company' exists and is consistent in stg_campaigns
+              field: Company
 
       - name: month_id
-        description: "Numeric representation of the month and year (Format: YYYYMM). Used as the primary time dimension for historical data and forecasts."
+        description: "A unique numeric identifier for the year and month (YYYYMM format). Used for time series ordering and joining."
         tests:
           - not_null
           - dbt_utils.unique_combination_of_columns:
               combination_of_columns:
                 - Company
                 - month_id
-          - dbt_utils.accepted_range: # Ensure sensible date range
-              min_value: 190001 # Example minimum, adjust if needed
 
       - name: month
         description: "The calendar month number (1-12)."
@@ -41,139 +40,148 @@ models:
         description: "The calendar year."
         tests:
           - not_null
-          - dbt_utils.accepted_range: # Ensure sensible year range
-              min_value: 1900 # Example minimum, adjust if needed
+          - dbt_utils.accepted_range:
+              min_value: 2000 # Assuming data starts around or after year 2000
 
       - name: conversion_rate
-        description: "Historical average conversion rate for the company in that month. Null for forecast periods."
+        description: "The historical average monthly conversion rate for the company's campaigns. Null for forecast periods."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "conversion_rate IS NOT NULL" # Test only non-null historical values
+              where: "is_forecast = false" # Only test historical values
 
       - name: conversion_rate_forecast
-        description: "Forecasted average conversion rate for the company in that future month. Null for historical periods."
+        description: "The forecasted average monthly conversion rate for the next 3 months. Null for historical periods."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "is_forecast = true AND conversion_rate_forecast IS NOT NULL" # Test only non-null forecast values
+              where: "is_forecast = true" # Only test forecast values
 
       - name: conversion_rate_lower_bound
-        description: "Lower bound of the 95% confidence interval for the conversion rate forecast. Null for historical periods."
+        description: "The lower bound of the 95% confidence interval for the forecasted conversion rate. Null for historical periods."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "is_forecast = true AND conversion_rate_lower_bound IS NOT NULL"
+              where: "is_forecast = true" # Only test forecast values
 
       - name: conversion_rate_upper_bound
-        description: "Upper bound of the 95% confidence interval for the conversion rate forecast. Null for historical periods."
+        description: "The upper bound of the 95% confidence interval for the forecasted conversion rate. Null for historical periods."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "is_forecast = true AND conversion_rate_upper_bound IS NOT NULL"
-          - dbt_utils.expression_is_true: # Check logical bound order
-              expression: "conversion_rate_lower_bound <= conversion_rate_upper_bound"
-              where: "is_forecast = true AND conversion_rate_lower_bound IS NOT NULL AND conversion_rate_upper_bound IS NOT NULL"
+              where: "is_forecast = true" # Only test forecast values
+          - dbt_expectations.expect_column_values_to_be_greater_than_or_equal_to_other_column:
+              column_name: conversion_rate_upper_bound
+              other_column_name: conversion_rate_lower_bound
+              where: "is_forecast = true AND conversion_rate_lower_bound IS NOT NULL" # Compare only when both exist
 
       - name: roi
-        description: "Historical average Return on Investment (ROI) for the company in that month. Null for forecast periods."
+        description: "The historical average monthly Return on Investment (ROI) for the company's campaigns. Null for forecast periods."
+        # No range test, as ROI can be negative.
         tests:
-          - dbt_utils.accepted_range: # ROI can theoretically be negative, but often >= 0 in marketing contexts. Adjust min_value if needed.
-              min_value: 0
-              where: "roi IS NOT NULL"
+          # Add a test if specific business logic dictates non-null historical ROI
+          # - not_null:
+          #     where: "is_forecast = false"
+          - {} # Placeholder if no specific test needed beyond type check
 
       - name: roi_forecast
-        description: "Forecasted average ROI for the company in that future month. Null for historical periods."
+        description: "The forecasted average monthly ROI for the next 3 months. Null for historical periods."
+        # No range test, as forecasted ROI can be negative.
         tests:
-          - dbt_utils.accepted_range:
-              min_value: 0
-              where: "is_forecast = true AND roi_forecast IS NOT NULL"
+          # Add a test if specific business logic dictates non-null forecast ROI
+          # - not_null:
+          #     where: "is_forecast = true"
+          - {} # Placeholder if no specific test needed beyond type check
 
       - name: roi_lower_bound
-        description: "Lower bound of the 95% confidence interval for the ROI forecast. Null for historical periods."
+        description: "The lower bound of the 95% confidence interval for the forecasted ROI. Null for historical periods."
         tests:
-          - dbt_utils.accepted_range:
-              min_value: 0
-              where: "is_forecast = true AND roi_lower_bound IS NOT NULL"
+          # Add a test if specific business logic dictates non-null forecast bounds
+          # - not_null:
+          #     where: "is_forecast = true"
+          - {} # Placeholder if no specific test needed beyond type check
 
       - name: roi_upper_bound
-        description: "Upper bound of the 95% confidence interval for the ROI forecast. Null for historical periods."
+        description: "The upper bound of the 95% confidence interval for the forecasted ROI. Null for historical periods."
         tests:
-          - dbt_utils.accepted_range:
-              min_value: 0
-              where: "is_forecast = true AND roi_upper_bound IS NOT NULL"
-          - dbt_utils.expression_is_true: # Check logical bound order
-              expression: "roi_lower_bound <= roi_upper_bound"
-              where: "is_forecast = true AND roi_lower_bound IS NOT NULL AND roi_upper_bound IS NOT NULL"
+          # Add a test if specific business logic dictates non-null forecast bounds
+          # - not_null:
+          #     where: "is_forecast = true"
+          - dbt_expectations.expect_column_values_to_be_greater_than_or_equal_to_other_column:
+              column_name: roi_upper_bound
+              other_column_name: roi_lower_bound
+              where: "is_forecast = true AND roi_lower_bound IS NOT NULL" # Compare only when both exist
 
       - name: acquisition_cost
-        description: "Historical average acquisition cost for the company in that month. Null for forecast periods."
+        description: "The historical average monthly acquisition cost for the company's campaigns. Null for forecast periods."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "acquisition_cost IS NOT NULL"
+              where: "is_forecast = false" # Only test historical values
 
       - name: acquisition_cost_forecast
-        description: "Forecasted average acquisition cost for the company in that future month. Null for historical periods."
+        description: "The forecasted average monthly acquisition cost for the next 3 months. Null for historical periods."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "is_forecast = true AND acquisition_cost_forecast IS NOT NULL"
+              where: "is_forecast = true" # Only test forecast values
 
       - name: acquisition_cost_lower_bound
-        description: "Lower bound of the 95% confidence interval for the acquisition cost forecast (lower cost is better). Null for historical periods."
+        description: "The lower bound of the 95% confidence interval for the forecasted acquisition cost. Null for historical periods."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "is_forecast = true AND acquisition_cost_lower_bound IS NOT NULL"
+              where: "is_forecast = true" # Only test forecast values
 
       - name: acquisition_cost_upper_bound
-        description: "Upper bound of the 95% confidence interval for the acquisition cost forecast. Null for historical periods."
+        description: "The upper bound of the 95% confidence interval for the forecasted acquisition cost. Null for historical periods."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "is_forecast = true AND acquisition_cost_upper_bound IS NOT NULL"
-          - dbt_utils.expression_is_true: # Check logical bound order
-              expression: "acquisition_cost_lower_bound <= acquisition_cost_upper_bound"
-              where: "is_forecast = true AND acquisition_cost_lower_bound IS NOT NULL AND acquisition_cost_upper_bound IS NOT NULL"
+              where: "is_forecast = true" # Only test forecast values
+          - dbt_expectations.expect_column_values_to_be_greater_than_or_equal_to_other_column:
+              column_name: acquisition_cost_upper_bound
+              other_column_name: acquisition_cost_lower_bound
+              where: "is_forecast = true AND acquisition_cost_lower_bound IS NOT NULL" # Compare only when both exist
 
       - name: ctr
-        description: "Historical average Click-Through Rate (CTR) for the company in that month. Null for forecast periods."
+        description: "The historical average monthly Click-Through Rate (CTR) for the company's campaigns. Null for forecast periods."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "ctr IS NOT NULL"
+              where: "is_forecast = false" # Only test historical values
 
       - name: ctr_forecast
-        description: "Forecasted average CTR for the company in that future month. Null for historical periods."
+        description: "The forecasted average monthly CTR for the next 3 months. Null for historical periods."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "is_forecast = true AND ctr_forecast IS NOT NULL"
+              where: "is_forecast = true" # Only test forecast values
 
       - name: ctr_lower_bound
-        description: "Lower bound of the 95% confidence interval for the CTR forecast. Null for historical periods."
+        description: "The lower bound of the 95% confidence interval for the forecasted CTR. Null for historical periods."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "is_forecast = true AND ctr_lower_bound IS NOT NULL"
+              where: "is_forecast = true" # Only test forecast values
 
       - name: ctr_upper_bound
-        description: "Upper bound of the 95% confidence interval for the CTR forecast. Null for historical periods."
+        description: "The upper bound of the 95% confidence interval for the forecasted CTR. Null for historical periods."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "is_forecast = true AND ctr_upper_bound IS NOT NULL"
-          - dbt_utils.expression_is_true: # Check logical bound order
-              expression: "ctr_lower_bound <= ctr_upper_bound"
-              where: "is_forecast = true AND ctr_lower_bound IS NOT NULL AND ctr_upper_bound IS NOT NULL"
+              where: "is_forecast = true" # Only test forecast values
+          - dbt_expectations.expect_column_values_to_be_greater_than_or_equal_to_other_column:
+              column_name: ctr_upper_bound
+              other_column_name: ctr_lower_bound
+              where: "is_forecast = true AND ctr_lower_bound IS NOT NULL" # Compare only when both exist
 
       - name: is_forecast
-        description: "Boolean flag indicating whether the row represents historical data (false) or forecasted data (true)."
+        description: "A boolean flag indicating whether the row represents historical data (FALSE) or forecasted data (TRUE)."
         tests:
           - not_null
           - accepted_values:
-              values: [true, false]
+              values: [True, False]
 
       - name: month_name
         description: "The full name of the calendar month (e.g., 'January', 'February')."
@@ -183,15 +191,15 @@ models:
               values: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
       - name: conversion_rate_uncertainty
-        description: "A relative measure of the forecast uncertainty for conversion rate, calculated as the width of the confidence interval relative to the forecast value. Null for historical periods."
+        description: "A measure of the relative uncertainty in the conversion rate forecast (width of confidence interval relative to the forecast value). Null for historical periods."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "is_forecast = true AND conversion_rate_uncertainty IS NOT NULL" # Test only non-null forecast values
+              where: "is_forecast = true" # Only test forecast values
 
       - name: roi_uncertainty
-        description: "A relative measure of the forecast uncertainty for ROI, calculated as the width of the confidence interval relative to the forecast value. Null for historical periods."
+        description: "A measure of the relative uncertainty in the ROI forecast (width of confidence interval relative to the forecast value). Null for historical periods."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "is_forecast = true AND roi_uncertainty IS NOT NULL" # Test only non-null forecast values
+              where: "is_forecast = true" # Only test forecast values

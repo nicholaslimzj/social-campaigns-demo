@@ -3,34 +3,29 @@ version: 2
 models:
   - name: metrics_monthly_anomalies
     description: |
-      Identifies anomalies in monthly performance metrics for each company by analyzing deviations from expected values based on recent trends (rolling 3-month window).
-      It calculates rolling statistics (mean, standard deviation) for key metrics, computes z-scores to measure deviation, and flags significant outliers (absolute z-score > 2) that may require investigation.
-      This model aggregates data from `stg_campaigns` to a monthly level per company before performing the anomaly detection.
-      Used in dashboards for Monthly Anomaly Detection alerts, Performance Monitoring, and Risk Management visualizations.
+      Identifies anomalies in monthly performance metrics per company by analyzing deviations from expected values based on recent trends (3-month rolling window).
+      It calculates rolling statistics (mean, standard deviation) for key metrics, computes z-scores, and flags significant deviations (absolute z-score > 2) to highlight potential issues or opportunities requiring attention.
+      This model aggregates data from the `stg_campaigns` model to a monthly level per company.
     config:
       materialized: table
-      tags:
-        - 'mart'
-        - 'anomaly_detection'
-        - 'performance'
-        - 'monthly'
+      tags: ['mart', 'anomaly_detection', 'monitoring', 'monthly']
     columns:
       - name: Company
-        description: "Identifier for the company whose metrics are being analyzed."
+        description: "The name of the company for which metrics are calculated."
         tests:
           - not_null
-          # Apply the unique combination test on one of the key columns
+          # Test relationship to the staging layer
+          - relationships:
+              to: ref('stg_campaigns')
+              field: Company
+          # Multi-column unique constraint with month
           - dbt_utils.unique_combination_of_columns:
               combination_of_columns:
                 - Company
                 - month
-          # Optional: Add relationship test if a dim_companies model exists
-          # - relationships:
-          #     to: ref('dim_companies')
-          #     field: company_name # Assuming dim_companies has a company_name field
 
       - name: month
-        description: "The numeric representation of the month (1-12) for which the metrics and anomalies are calculated."
+        description: "The calendar month number (1-12) for which the metrics are aggregated."
         tests:
           - not_null
           - accepted_values:
@@ -39,26 +34,26 @@ models:
       - name: avg_conversion_rate
         description: "The average conversion rate for the company during the specified month."
         tests:
-          - not_null
-          - dbt_expectations.expect_column_values_to_be_between:
+          - dbt_utils.accepted_range:
               min_value: 0
-              # max_value: 1 # Or higher if applicable, depending on definition
+              max_value: 1 # Conversion rate should be between 0 and 1
+              where: "avg_conversion_rate IS NOT NULL"
 
       - name: conversion_rate_mean
-        description: "The rolling average conversion rate over the 3 months preceding the current month for the company. Used as the expected value for anomaly detection. Can be NULL for early months."
-        # No specific tests needed, can be NULL
+        description: "The rolling average of the monthly conversion rate over the previous 3 months (excluding the current month)."
 
       - name: conversion_rate_std
-        description: "The rolling population standard deviation of the conversion rate over the 3 months preceding the current month for the company. Measures historical volatility. Can be NULL or 0 for early months or stable periods."
+        description: "The rolling standard deviation of the monthly conversion rate over the previous 3 months (excluding the current month)."
         tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range:
+              min_value: 0 # Standard deviation cannot be negative
+              where: "conversion_rate_std IS NOT NULL"
 
       - name: conversion_rate_z
-        description: "The z-score for the monthly average conversion rate, indicating how many standard deviations the current month's value is from the rolling 3-month mean. NULL if standard deviation is 0 or undefined."
-        # No specific tests needed, can be NULL
+        description: "The z-score for the current month's conversion rate, indicating how many standard deviations it is from the rolling 3-month mean. Null if standard deviation is zero or null."
 
       - name: conversion_rate_anomaly
-        description: "Flag indicating if the monthly average conversion rate is considered an anomaly ('anomaly') or within the expected range ('normal') based on the z-score threshold (>|2|)."
+        description: "Flag indicating if the conversion rate is considered an anomaly ('anomaly') or within the expected range ('normal') based on a z-score threshold of 2."
         tests:
           - not_null
           - accepted_values:
@@ -67,51 +62,52 @@ models:
       - name: avg_roi
         description: "The average Return on Investment (ROI) for the company during the specified month."
         tests:
-          - not_null # ROI can be negative
+          - dbt_utils.accepted_range:
+              min_value: -1 # ROI can be negative, minimum is -100% or -1
+              where: "avg_roi IS NOT NULL"
 
       - name: roi_mean
-        description: "The rolling average ROI over the 3 months preceding the current month for the company. Used as the expected value for anomaly detection. Can be NULL for early months."
-        # No specific tests needed, can be NULL
+        description: "The rolling average of the monthly ROI over the previous 3 months (excluding the current month)."
 
       - name: roi_std
-        description: "The rolling population standard deviation of the ROI over the 3 months preceding the current month for the company. Measures historical volatility. Can be NULL or 0 for early months or stable periods."
+        description: "The rolling standard deviation of the monthly ROI over the previous 3 months (excluding the current month)."
         tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range:
+              min_value: 0 # Standard deviation cannot be negative
+              where: "roi_std IS NOT NULL"
 
       - name: roi_z
-        description: "The z-score for the monthly average ROI, indicating how many standard deviations the current month's value is from the rolling 3-month mean. NULL if standard deviation is 0 or undefined."
-        # No specific tests needed, can be NULL
+        description: "The z-score for the current month's ROI, indicating how many standard deviations it is from the rolling 3-month mean. Null if standard deviation is zero or null."
 
       - name: roi_anomaly
-        description: "Flag indicating if the monthly average ROI is considered an anomaly ('anomaly') or within the expected range ('normal') based on the z-score threshold (>|2|)."
+        description: "Flag indicating if the ROI is considered an anomaly ('anomaly') or within the expected range ('normal') based on a z-score threshold of 2."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: avg_acquisition_cost
-        description: "The average Acquisition Cost for the company during the specified month."
+        description: "The average acquisition cost for the company during the specified month."
         tests:
-          - not_null
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "avg_acquisition_cost IS NOT NULL"
 
       - name: acquisition_cost_mean
-        description: "The rolling average Acquisition Cost over the 3 months preceding the current month for the company. Used as the expected value for anomaly detection. Can be NULL for early months."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative:
-              allow_nulls: true # Mean can be null if preceding data is missing
+        description: "The rolling average of the monthly acquisition cost over the previous 3 months (excluding the current month)."
 
       - name: acquisition_cost_std
-        description: "The rolling population standard deviation of the Acquisition Cost over the 3 months preceding the current month for the company. Measures historical volatility. Can be NULL or 0 for early months or stable periods."
+        description: "The rolling standard deviation of the monthly acquisition cost over the previous 3 months (excluding the current month)."
         tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range:
+              min_value: 0 # Standard deviation cannot be negative
+              where: "acquisition_cost_std IS NOT NULL"
 
       - name: acquisition_cost_z
-        description: "The z-score for the monthly average Acquisition Cost, indicating how many standard deviations the current month's value is from the rolling 3-month mean. NULL if standard deviation is 0 or undefined."
-        # No specific tests needed, can be NULL
+        description: "The z-score for the current month's acquisition cost, indicating how many standard deviations it is from the rolling 3-month mean. Null if standard deviation is zero or null."
 
       - name: acquisition_cost_anomaly
-        description: "Flag indicating if the monthly average Acquisition Cost is considered an anomaly ('anomaly') or within the expected range ('normal') based on the z-score threshold (>|2|)."
+        description: "Flag indicating if the acquisition cost is considered an anomaly ('anomaly') or within the expected range ('normal') based on a z-score threshold of 2."
         tests:
           - not_null
           - accepted_values:
@@ -120,26 +116,25 @@ models:
       - name: total_clicks
         description: "The total number of clicks for the company during the specified month."
         tests:
-          - not_null
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "total_clicks IS NOT NULL"
 
       - name: clicks_mean
-        description: "The rolling average total clicks over the 3 months preceding the current month for the company. Used as the expected value for anomaly detection. Can be NULL for early months."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative:
-              allow_nulls: true
+        description: "The rolling average of the total monthly clicks over the previous 3 months (excluding the current month)."
 
       - name: clicks_std
-        description: "The rolling population standard deviation of the total clicks over the 3 months preceding the current month for the company. Measures historical volatility. Can be NULL or 0 for early months or stable periods."
+        description: "The rolling standard deviation of the total monthly clicks over the previous 3 months (excluding the current month)."
         tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range:
+              min_value: 0 # Standard deviation cannot be negative
+              where: "clicks_std IS NOT NULL"
 
       - name: clicks_z
-        description: "The z-score for the total monthly clicks, indicating how many standard deviations the current month's value is from the rolling 3-month mean. NULL if standard deviation is 0 or undefined."
-        # No specific tests needed, can be NULL
+        description: "The z-score for the current month's total clicks, indicating how many standard deviations it is from the rolling 3-month mean. Null if standard deviation is zero or null."
 
       - name: clicks_anomaly
-        description: "Flag indicating if the total monthly clicks is considered an anomaly ('anomaly') or within the expected range ('normal') based on the z-score threshold (>|2|)."
+        description: "Flag indicating if the total clicks are considered an anomaly ('anomaly') or within the expected range ('normal') based on a z-score threshold of 2."
         tests:
           - not_null
           - accepted_values:
@@ -148,26 +143,25 @@ models:
       - name: total_impressions
         description: "The total number of impressions for the company during the specified month."
         tests:
-          - not_null
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "total_impressions IS NOT NULL"
 
       - name: impressions_mean
-        description: "The rolling average total impressions over the 3 months preceding the current month for the company. Used as the expected value for anomaly detection. Can be NULL for early months."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative:
-              allow_nulls: true
+        description: "The rolling average of the total monthly impressions over the previous 3 months (excluding the current month)."
 
       - name: impressions_std
-        description: "The rolling population standard deviation of the total impressions over the 3 months preceding the current month for the company. Measures historical volatility. Can be NULL or 0 for early months or stable periods."
+        description: "The rolling standard deviation of the total monthly impressions over the previous 3 months (excluding the current month)."
         tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range:
+              min_value: 0 # Standard deviation cannot be negative
+              where: "impressions_std IS NOT NULL"
 
       - name: impressions_z
-        description: "The z-score for the total monthly impressions, indicating how many standard deviations the current month's value is from the rolling 3-month mean. NULL if standard deviation is 0 or undefined."
-        # No specific tests needed, can be NULL
+        description: "The z-score for the current month's total impressions, indicating how many standard deviations it is from the rolling 3-month mean. Null if standard deviation is zero or null."
 
       - name: impressions_anomaly
-        description: "Flag indicating if the total monthly impressions is considered an anomaly ('anomaly') or within the expected range ('normal') based on the z-score threshold (>|2|)."
+        description: "Flag indicating if the total impressions are considered an anomaly ('anomaly') or within the expected range ('normal') based on a z-score threshold of 2."
         tests:
           - not_null
           - accepted_values:
@@ -176,87 +170,88 @@ models:
       - name: monthly_ctr
         description: "The calculated Click-Through Rate (CTR) for the company during the specified month (Total Clicks / Total Impressions)."
         tests:
-          - not_null
-          - dbt_expectations.expect_column_values_to_be_between:
+          - dbt_utils.accepted_range:
               min_value: 0
-              # max_value: 1 # CTR is typically between 0 and 1
+              max_value: 1 # CTR should be between 0 and 1
+              where: "monthly_ctr IS NOT NULL"
 
       - name: ctr_mean
-        description: "The rolling average CTR over the 3 months preceding the current month for the company. Used as the expected value for anomaly detection. Can be NULL for early months."
-        # No specific tests needed, can be NULL
+        description: "The rolling average of the monthly CTR over the previous 3 months (excluding the current month)."
 
       - name: ctr_std
-        description: "The rolling population standard deviation of the CTR over the 3 months preceding the current month for the company. Measures historical volatility. Can be NULL or 0 for early months or stable periods."
+        description: "The rolling standard deviation of the monthly CTR over the previous 3 months (excluding the current month)."
         tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range:
+              min_value: 0 # Standard deviation cannot be negative
+              where: "ctr_std IS NOT NULL"
 
       - name: ctr_z
-        description: "The z-score for the monthly CTR, indicating how many standard deviations the current month's value is from the rolling 3-month mean. NULL if standard deviation is 0 or undefined."
-        # No specific tests needed, can be NULL
+        description: "The z-score for the current month's CTR, indicating how many standard deviations it is from the rolling 3-month mean. Null if standard deviation is zero or null."
 
       - name: ctr_anomaly
-        description: "Flag indicating if the monthly CTR is considered an anomaly ('anomaly') or within the expected range ('normal') based on the z-score threshold (>|2|)."
+        description: "Flag indicating if the CTR is considered an anomaly ('anomaly') or within the expected range ('normal') based on a z-score threshold of 2."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: total_spend
-        description: "The total calculated spend for the company during the specified month."
+        description: "The total spend (sum of acquisition costs) for the company during the specified month."
         tests:
-          - not_null
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "total_spend IS NOT NULL"
 
       - name: spend_mean
-        description: "The rolling average total spend over the 3 months preceding the current month for the company. Used as the expected value for anomaly detection. Can be NULL for early months."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative:
-              allow_nulls: true
+        description: "The rolling average of the total monthly spend over the previous 3 months (excluding the current month)."
 
       - name: spend_std
-        description: "The rolling population standard deviation of the total spend over the 3 months preceding the current month for the company. Measures historical volatility. Can be NULL or 0 for early months or stable periods."
+        description: "The rolling standard deviation of the total monthly spend over the previous 3 months (excluding the current month)."
         tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range:
+              min_value: 0 # Standard deviation cannot be negative
+              where: "spend_std IS NOT NULL"
 
       - name: spend_z
-        description: "The z-score for the total monthly spend, indicating how many standard deviations the current month's value is from the rolling 3-month mean. NULL if standard deviation is 0 or undefined."
-        # No specific tests needed, can be NULL
+        description: "The z-score for the current month's total spend, indicating how many standard deviations it is from the rolling 3-month mean. Null if standard deviation is zero or null."
 
       - name: spend_anomaly
-        description: "Flag indicating if the total monthly spend is considered an anomaly ('anomaly') or within the expected range ('normal') based on the z-score threshold (>|2|)."
+        description: "Flag indicating if the total spend is considered an anomaly ('anomaly') or within the expected range ('normal') based on a z-score threshold of 2."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: total_revenue
-        description: "The total calculated revenue for the company during the specified month."
+        description: "The total estimated revenue generated for the company during the specified month, calculated as SUM(Acquisition_Cost * (1 + ROI))."
         tests:
-          - not_null
-          # Revenue can theoretically be negative if costs exceed gross profit in some models, adjust if needed.
-          # - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range:
+              min_value: 0 # Revenue can be zero but not negative based on calculation logic if ROI >= -1
+              where: "total_revenue IS NOT NULL"
 
       - name: revenue_mean
-        description: "The rolling average total revenue over the 3 months preceding the current month for the company. Used as the expected value for anomaly detection. Can be NULL for early months."
-        # No specific tests needed, can be NULL
+        description: "The rolling average of the total monthly revenue over the previous 3 months (excluding the current month)."
 
       - name: revenue_std
-        description: "The rolling population standard deviation of the total revenue over the 3 months preceding the current month for the company. Measures historical volatility. Can be NULL or 0 for early months or stable periods."
+        description: "The rolling standard deviation of the total monthly revenue over the previous 3 months (excluding the current month)."
         tests:
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range:
+              min_value: 0 # Standard deviation cannot be negative
+              where: "revenue_std IS NOT NULL"
 
       - name: revenue_z
-        description: "The z-score for the total monthly revenue, indicating how many standard deviations the current month's value is from the rolling 3-month mean. NULL if standard deviation is 0 or undefined."
-        # No specific tests needed, can be NULL
+        description: "The z-score for the current month's total revenue, indicating how many standard deviations it is from the rolling 3-month mean. Null if standard deviation is zero or null."
 
       - name: revenue_anomaly
-        description: "Flag indicating if the total monthly revenue is considered an anomaly ('anomaly') or within the expected range ('normal') based on the z-score threshold (>|2|)."
+        description: "Flag indicating if the total revenue is considered an anomaly ('anomaly') or within the expected range ('normal') based on a z-score threshold of 2."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: has_anomaly
-        description: "A boolean flag that is TRUE if any of the calculated metrics for the company and month were flagged as an anomaly, FALSE otherwise. Useful for filtering."
+        description: "A boolean flag indicating TRUE if any of the calculated metrics for the given company and month were flagged as an anomaly, FALSE otherwise."
         tests:
           - not_null
+          - accepted_values:
+              values: [true, false] # Boolean values

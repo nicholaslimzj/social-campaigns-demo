@@ -1,14 +1,13 @@
 {
   "name": "channel_quarter_budget_optimizer",
-  "description": "Mart model analyzing channel performance for the current quarter (last 3 months of available data) to provide optimal budget allocation recommendations across channels within each company. It calculates key efficiency metrics (ROI, CPA, CTR), models marginal returns (simplified), determines optimal spend shares considering minimum/maximum constraints, projects potential revenue/ROI improvements, and compares optimal vs. current allocation. Designed for use in budget optimization dashboards and strategic planning.",
+  "description": "Mart model that analyzes marketing channel performance and efficiency for the current quarter (last 3 months of data).\nIt aggregates campaign data by Company and Channel, calculates key metrics like ROI efficiency, CPC, and CTR,\nand provides optimal budget allocation recommendations based on a simplified marginal returns model.\nThe model compares current vs. optimal spend, projects potential revenue and ROI improvements,\nand categorizes recommendations by strength and direction. Designed for use in budget planning dashboards and tools.\n",
   "columns": [
     {
       "name": "Company",
       "type": "VARCHAR",
-      "description": "The name of the company being analyzed. Part of the unique key for this model.",
+      "description": "The name of the company being analyzed.",
       "tests": [
         "not_null",
-        "dbt_utils.unique_combination_of_columns",
         "relationships"
       ],
       "tags": []
@@ -16,208 +15,234 @@
     {
       "name": "Channel_Used",
       "type": "VARCHAR",
-      "description": "The marketing channel used (e.g., Instagram, Facebook, Twitter). Part of the unique key for this model.",
+      "description": "The marketing channel used (e.g., Instagram, Twitter, Facebook).",
       "tests": [
         "not_null",
-        "relationships"
+        "relationships",
+        "accepted_values",
+        "dbt_utils.unique_combination_of_columns"
       ],
       "tags": []
     },
     {
       "name": "campaign_count",
       "type": "BIGINT",
-      "description": "Number of distinct campaigns run by the company on this channel during the analyzed quarter.",
+      "description": "The total number of distinct campaigns run by the company on this channel during the quarter.",
       "tests": [
-        "dbt_utils.not_negative"
+        "not_null",
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "company_count",
       "type": "INTEGER",
-      "description": "Helper column indicating count of companies (always 1 at this aggregation level of Company and Channel).",
-      "tests": [],
+      "description": "Count of companies included in this row (always 1 as the data is grouped by Company and Channel).",
+      "tests": [
+        "not_null",
+        "accepted_values"
+      ],
       "tags": []
     },
     {
       "name": "total_spend",
       "type": "DOUBLE",
-      "description": "Total spend attributed to this channel for the company during the analyzed quarter. Calculated as SUM(Clicks * Conversion_Rate * Acquisition_Cost).",
+      "description": "Total amount spent on this channel by the company during the quarter.",
       "tests": [
-        "dbt_utils.not_negative"
+        "not_null",
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "total_revenue",
       "type": "DOUBLE",
-      "description": "Total revenue attributed to this channel for the company during the analyzed quarter. Calculated as SUM(Clicks * Conversion_Rate * Acquisition_Cost * (1 + ROI)).",
+      "description": "Total revenue generated from this channel by the company during the quarter.",
       "tests": [
-        "dbt_utils.not_negative"
+        "not_null",
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "avg_roi",
       "type": "DOUBLE",
-      "description": "Average Return on Investment (ROI) for campaigns on this channel during the analyzed quarter.",
-      "tests": [],
+      "description": "Average Return on Investment (ROI) across all campaigns for this company and channel during the quarter.",
+      "tests": [
+        "not_null"
+      ],
       "tags": []
     },
     {
       "name": "avg_conversion_rate",
       "type": "DOUBLE",
-      "description": "Average conversion rate for campaigns on this channel during the analyzed quarter.",
+      "description": "Average conversion rate across all campaigns for this company and channel during the quarter.",
       "tests": [
-        "dbt_utils.not_negative"
+        "not_null",
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "avg_acquisition_cost",
       "type": "DOUBLE",
-      "description": "Average cost per acquisition (CPA) for campaigns on this channel during the analyzed quarter.",
+      "description": "Average cost to acquire a customer/conversion across all campaigns for this company and channel during the quarter.",
       "tests": [
-        "dbt_utils.not_negative"
+        "not_null",
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "avg_ctr",
       "type": "FLOAT",
-      "description": "Average click-through rate (CTR) calculated as SUM(Clicks) / NULLIF(SUM(Impressions), 0) for this channel/company in the quarter.",
+      "description": "Average Click-Through Rate (CTR) calculated as SUM(Clicks) / SUM(Impressions) for this company and channel during the quarter.",
       "tests": [
-        "dbt_utils.not_negative"
+        "not_null",
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "roi_efficiency",
       "type": "DOUBLE",
-      "description": "Calculated efficiency metric: Total Revenue / Total Spend for this channel/company in the quarter. Returns 0 if total spend is 0.",
+      "description": "Calculated overall ROI efficiency for the channel (Total Revenue / Total Spend) during the quarter.",
       "tests": [
-        "dbt_utils.not_negative"
+        "not_null"
       ],
       "tags": []
     },
     {
       "name": "cost_per_click",
       "type": "DOUBLE",
-      "description": "Calculated cost per click (CPC) for this channel/company in the quarter: Total Spend / Total Clicks. Returns 0 if total clicks is 0.",
+      "description": "Calculated overall Cost Per Click (CPC) for the channel (Total Spend / Total Clicks) during the quarter.",
       "tests": [
-        "dbt_utils.not_negative"
+        "not_null",
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "click_through_rate",
       "type": "FLOAT",
-      "description": "Calculated overall click-through rate (CTR) for this channel/company in the quarter: Total Clicks / Total Impressions. Returns 0 if total impressions is 0.",
+      "description": "Calculated overall Click-Through Rate (CTR) for the channel (Total Clicks / Total Impressions) during the quarter. Note: Similar to avg_ctr but calculated on aggregated totals.",
       "tests": [
-        "dbt_utils.not_negative",
-        "dbt_expectations.expect_column_values_to_be_between"
+        "not_null",
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "current_spend_share",
       "type": "DOUBLE",
-      "description": "The proportion of the company's total quarterly spend allocated to this channel currently.",
+      "description": "The percentage of the company's total marketing spend allocated to this channel during the quarter.",
       "tests": [
-        "dbt_utils.not_negative",
-        "dbt_expectations.expect_column_values_to_be_between"
+        "not_null",
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "current_revenue_share",
       "type": "DOUBLE",
-      "description": "The proportion of the company's total quarterly revenue generated by this channel currently.",
+      "description": "The percentage of the company's total marketing revenue generated by this channel during the quarter.",
       "tests": [
-        "dbt_utils.not_negative",
-        "dbt_expectations.expect_column_values_to_be_between"
+        "not_null",
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "efficiency_rank",
       "type": "BIGINT",
-      "description": "Rank of the channel within the company based on descending marginal ROI (1 = highest estimated marginal return).",
+      "description": "The rank of the channel's efficiency (based on marginal ROI) within the company (1 = most efficient).",
       "tests": [
-        "dbt_utils.not_negative"
+        "not_null",
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "optimal_spend_share",
       "type": "DOUBLE",
-      "description": "The recommended optimal proportion of the company's total budget to allocate to this channel, based on the simplified optimization model and normalized to sum to 1 across channels for the company.",
+      "description": "The recommended optimal percentage of the company's total marketing spend to allocate to this channel, normalized to sum to 100% across channels.",
       "tests": [
-        "dbt_utils.not_negative",
-        "dbt_expectations.expect_column_values_to_be_between"
+        "not_null",
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "spend_share_change",
       "type": "DOUBLE",
-      "description": "The calculated change between the optimal spend share and the current spend share (Optimal - Current). Indicates the recommended shift in budget allocation percentage.",
-      "tests": [],
+      "description": "The difference between the optimal spend share and the current spend share (Optimal - Current).",
+      "tests": [
+        "not_null"
+      ],
       "tags": []
     },
     {
       "name": "current_spend",
       "type": "DOUBLE",
-      "description": "The absolute current spend on this channel for the company in the quarter (same value as total_spend, included for direct comparison).",
+      "description": "Absolute current spend for this company and channel (same as total_spend).",
       "tests": [
-        "dbt_utils.not_negative"
+        "not_null",
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "optimal_spend",
       "type": "DOUBLE",
-      "description": "The recommended absolute spend amount for this channel based on the optimal spend share applied to the company's total current spend.",
+      "description": "Recommended optimal absolute spend for this company and channel based on the optimal spend share and total company spend.",
       "tests": [
-        "dbt_utils.not_negative"
+        "not_null",
+        "dbt_utils.accepted_range"
       ],
       "tags": []
     },
     {
       "name": "spend_change",
       "type": "DOUBLE",
-      "description": "The calculated absolute change in spend recommended (Optimal Spend - Current Spend).",
-      "tests": [],
+      "description": "The difference between the optimal absolute spend and the current absolute spend (Optimal - Current).",
+      "tests": [
+        "not_null"
+      ],
       "tags": []
     },
     {
       "name": "projected_revenue",
       "type": "DOUBLE",
-      "description": "Estimated revenue for this channel if the optimal spend allocation is adopted, based on a simplified projection model incorporating diminishing/increasing returns.",
+      "description": "Estimated total revenue for this channel if the optimal spend allocation is adopted (based on a simplified projection model).",
       "tests": [
-        "dbt_utils.not_negative"
+        "not_null"
       ],
       "tags": []
     },
     {
       "name": "projected_roi",
       "type": "DOUBLE",
-      "description": "Estimated ROI for this channel if the optimal spend allocation is adopted, based on a simplified projection model incorporating diminishing/increasing returns.",
-      "tests": [],
+      "description": "Estimated ROI for this channel if the optimal spend allocation is adopted (based on a simplified projection model).",
+      "tests": [
+        "not_null"
+      ],
       "tags": []
     },
     {
       "name": "projected_improvement_pct",
       "type": "DOUBLE",
-      "description": "Projected percentage change in revenue compared to current revenue if optimal allocation is adopted ((Projected Revenue - Current Revenue) / Current Revenue). Returns 0 if current revenue is 0.",
-      "tests": [],
+      "description": "Projected percentage change in revenue compared to current revenue if the optimal spend allocation is adopted.",
+      "tests": [
+        "not_null"
+      ],
       "tags": []
     },
     {
       "name": "recommendation_strength",
       "type": "VARCHAR",
-      "description": "Categorical assessment of the magnitude of the recommended spend change based on the absolute difference between optimal and current spend share.",
+      "description": "Categorical assessment of the magnitude of the recommended spend change (minor_adjustment, moderate_adjustment, major_adjustment).",
       "tests": [
+        "not_null",
         "accepted_values"
       ],
       "tags": []
@@ -225,8 +250,9 @@
     {
       "name": "recommendation_direction",
       "type": "VARCHAR",
-      "description": "Direction of the recommended spend change (increase, decrease, or maintain).",
+      "description": "Categorical direction of the recommended spend change (increase_spend, decrease_spend, maintain_spend).",
       "tests": [
+        "not_null",
         "accepted_values"
       ],
       "tags": []

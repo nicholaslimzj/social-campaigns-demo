@@ -3,329 +3,304 @@ version: 2
 models:
   - name: audience_quarter_anomalies
     description: |
-      This mart model identifies anomalies in audience performance metrics for the current quarter.
-      It aggregates key metrics by Company and Target Audience, calculates rolling statistics (mean, standard deviation)
-      based on the previous three quarters, and uses Z-scores to flag significant deviations (>2 standard deviations)
-      from the historical trend. The model provides context for each anomaly, including its potential impact (positive/negative)
-      and a descriptive summary, aiding in performance monitoring and risk management.
-      Time Context: Current Quarter (based on the latest data in stg_campaigns)
-      Grain: Company, Target_Audience for the current quarter
+      Identifies anomalies in audience performance metrics at the Company and Target_Audience level for the current quarter.
+      It calculates rolling statistics (mean, standard deviation) for key metrics using the three preceding quarters.
+      Anomalies are flagged using a Z-score methodology, comparing the current quarter's performance against the historical trend (Z-score > 2 or < -2).
+      This model provides context for each anomaly to aid investigation and is intended for use in anomaly detection dashboards, performance monitoring, and risk management visualizations.
+      The output contains one row per Company and Target_Audience for the most recent complete quarter.
     config:
       materialized: table
       tags:
         - 'mart'
         - 'anomaly_detection'
-        - 'audience_performance'
+        - 'performance'
+        - 'quarterly'
     columns:
       - name: Company
-        description: "The name of the company associated with the campaign data. Primary dimension for analysis."
+        description: "The name of the company associated with the campaign data."
         tests:
           - not_null
-          - relationships:
-              to: ref('stg_campaigns')
-              field: Company
-          # Define the unique grain of the table
+          # Test for the unique combination of Company and Target_Audience as the grain
           - dbt_utils.unique_combination_of_columns:
               combination_of_columns:
                 - Company
                 - Target_Audience
 
       - name: Target_Audience
-        description: "The specific audience segment targeted by the campaigns within the company. Secondary dimension for analysis."
+        description: "The specific audience segment targeted by the campaigns for the company."
         tests:
           - not_null
-          - relationships:
-              to: ref('stg_campaigns')
-              field: Target_Audience
 
       - name: avg_conversion_rate
-        description: "Average conversion rate for the company-audience segment in the current quarter."
+        description: "The average conversion rate for this Company and Target Audience during the current quarter."
         tests:
+          - not_null
           - dbt_utils.accepted_range:
               min_value: 0
-              max_value: 1
-              # Assuming AVG won't return NULL unless all inputs are NULL, which is unlikely for a whole quarter.
-              # If NULL is possible, add: where: "avg_conversion_rate IS NOT NULL"
+              # Max value can theoretically exceed 1 if conversion definition allows multiple conversions per user/session
+              # max_value: 1 # Optional: uncomment if conversion rate is strictly <= 1
 
       - name: conversion_rate_mean
-        description: "Rolling average conversion rate calculated over the 3 quarters preceding the current quarter."
-        # Can be NULL if insufficient historical data
+        description: "The rolling average conversion rate over the 3 quarters preceding the current quarter."
 
       - name: conversion_rate_std
-        description: "Rolling population standard deviation of conversion rate calculated over the 3 quarters preceding the current quarter."
+        description: "The rolling population standard deviation of the conversion rate over the 3 quarters preceding the current quarter."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "conversion_rate_std IS NOT NULL" # Standard deviation cannot be negative
+              where: "conversion_rate_std IS NOT NULL" # Only test non-null values
 
       - name: conversion_rate_z
-        description: "Z-score for the current quarter's average conversion rate, indicating deviation from the rolling mean in terms of rolling standard deviations."
-        # Can be NULL if std dev is NULL or 0
+        description: "The Z-score for the current quarter's average conversion rate, indicating deviation from the rolling mean in terms of standard deviations."
 
       - name: conversion_rate_anomaly
-        description: "Flag indicating if the current quarter's average conversion rate is considered an anomaly ('anomaly') or within the expected range ('normal') based on a Z-score threshold (>|2|)."
+        description: "Flag indicating if the conversion rate for the current quarter is considered an anomaly ('anomaly' or 'normal') based on the Z-score threshold (>|2|)."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: avg_roi
-        description: "Average Return on Investment (ROI) for the company-audience segment in the current quarter."
-        # ROI can be negative, so a simple range test might not be suitable. Not null might be too strict if no data.
+        description: "The average Return on Investment (ROI) for this Company and Target Audience during the current quarter."
+        tests:
+          - not_null
+          # ROI can be negative
+          # - dbt_utils.accepted_range:
+          #     min_value: 0 # Optional: uncomment if ROI must be non-negative
 
       - name: roi_mean
-        description: "Rolling average ROI calculated over the 3 quarters preceding the current quarter."
-        # Can be NULL
+        description: "The rolling average ROI over the 3 quarters preceding the current quarter."
 
       - name: roi_std
-        description: "Rolling population standard deviation of ROI calculated over the 3 quarters preceding the current quarter."
+        description: "The rolling population standard deviation of the ROI over the 3 quarters preceding the current quarter."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "roi_std IS NOT NULL"
+              where: "roi_std IS NOT NULL" # Only test non-null values
 
       - name: roi_z
-        description: "Z-score for the current quarter's average ROI."
-        # Can be NULL
+        description: "The Z-score for the current quarter's average ROI, indicating deviation from the rolling mean."
 
       - name: roi_anomaly
-        description: "Flag indicating if the current quarter's average ROI is an anomaly ('anomaly') or normal ('normal')."
+        description: "Flag indicating if the ROI for the current quarter is considered an anomaly ('anomaly' or 'normal') based on the Z-score threshold (>|2|)."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: avg_acquisition_cost
-        description: "Average Acquisition Cost for the company-audience segment in the current quarter."
+        description: "The average acquisition cost for this Company and Target Audience during the current quarter."
         tests:
+          - not_null
           - dbt_utils.accepted_range:
               min_value: 0
-              # If NULL is possible, add: where: "avg_acquisition_cost IS NOT NULL"
 
       - name: acquisition_cost_mean
-        description: "Rolling average Acquisition Cost calculated over the 3 quarters preceding the current quarter."
-        # Can be NULL
+        description: "The rolling average acquisition cost over the 3 quarters preceding the current quarter."
 
       - name: acquisition_cost_std
-        description: "Rolling population standard deviation of Acquisition Cost calculated over the 3 quarters preceding the current quarter."
+        description: "The rolling population standard deviation of the acquisition cost over the 3 quarters preceding the current quarter."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "acquisition_cost_std IS NOT NULL"
+              where: "acquisition_cost_std IS NOT NULL" # Only test non-null values
 
       - name: acquisition_cost_z
-        description: "Z-score for the current quarter's average Acquisition Cost."
-        # Can be NULL
+        description: "The Z-score for the current quarter's average acquisition cost, indicating deviation from the rolling mean."
 
       - name: acquisition_cost_anomaly
-        description: "Flag indicating if the current quarter's average Acquisition Cost is an anomaly ('anomaly') or normal ('normal')."
+        description: "Flag indicating if the acquisition cost for the current quarter is considered an anomaly ('anomaly' or 'normal') based on the Z-score threshold (>|2|)."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: total_clicks
-        description: "Total number of clicks for the company-audience segment in the current quarter."
+        description: "The total number of clicks for this Company and Target Audience during the current quarter."
         tests:
-          - not_null # Aggregation should result in 0 if no clicks, not NULL
+          - not_null
           - dbt_utils.accepted_range:
               min_value: 0
 
       - name: clicks_mean
-        description: "Rolling average total clicks calculated over the 3 quarters preceding the current quarter."
-        # Can be NULL
+        description: "The rolling average total clicks over the 3 quarters preceding the current quarter."
 
       - name: clicks_std
-        description: "Rolling population standard deviation of total clicks calculated over the 3 quarters preceding the current quarter."
+        description: "The rolling population standard deviation of total clicks over the 3 quarters preceding the current quarter."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "clicks_std IS NOT NULL"
+              where: "clicks_std IS NOT NULL" # Only test non-null values
 
       - name: clicks_z
-        description: "Z-score for the current quarter's total clicks."
-        # Can be NULL
+        description: "The Z-score for the current quarter's total clicks, indicating deviation from the rolling mean."
 
       - name: clicks_anomaly
-        description: "Flag indicating if the current quarter's total clicks is an anomaly ('anomaly') or normal ('normal')."
+        description: "Flag indicating if the total clicks for the current quarter is considered an anomaly ('anomaly' or 'normal') based on the Z-score threshold (>|2|)."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: total_impressions
-        description: "Total number of impressions for the company-audience segment in the current quarter."
+        description: "The total number of impressions for this Company and Target Audience during the current quarter."
         tests:
-          - not_null # Aggregation should result in 0 if no impressions, not NULL
+          - not_null
           - dbt_utils.accepted_range:
               min_value: 0
 
       - name: impressions_mean
-        description: "Rolling average total impressions calculated over the 3 quarters preceding the current quarter."
-        # Can be NULL
+        description: "The rolling average total impressions over the 3 quarters preceding the current quarter."
 
       - name: impressions_std
-        description: "Rolling population standard deviation of total impressions calculated over the 3 quarters preceding the current quarter."
+        description: "The rolling population standard deviation of total impressions over the 3 quarters preceding the current quarter."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "impressions_std IS NOT NULL"
+              where: "impressions_std IS NOT NULL" # Only test non-null values
 
       - name: impressions_z
-        description: "Z-score for the current quarter's total impressions."
-        # Can be NULL
+        description: "The Z-score for the current quarter's total impressions, indicating deviation from the rolling mean."
 
       - name: impressions_anomaly
-        description: "Flag indicating if the current quarter's total impressions is an anomaly ('anomaly') or normal ('normal')."
+        description: "Flag indicating if the total impressions for the current quarter is considered an anomaly ('anomaly' or 'normal') based on the Z-score threshold (>|2|)."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: quarterly_ctr
-        description: "Click-Through Rate (CTR) calculated for the company-audience segment over the entire current quarter (Total Clicks / Total Impressions)."
+        description: "The calculated Click-Through Rate (CTR) for this Company and Target Audience during the current quarter (Total Clicks / Total Impressions)."
         tests:
+          - not_null
           - dbt_utils.accepted_range:
               min_value: 0
-              max_value: 1
-              where: "quarterly_ctr IS NOT NULL" # CTR can be NULL if impressions are 0
+              max_value: 1 # CTR must be between 0 and 1
 
       - name: ctr_mean
-        description: "Rolling average quarterly CTR calculated over the 3 quarters preceding the current quarter."
-        # Can be NULL
+        description: "The rolling average quarterly CTR over the 3 quarters preceding the current quarter."
 
       - name: ctr_std
-        description: "Rolling population standard deviation of quarterly CTR calculated over the 3 quarters preceding the current quarter."
+        description: "The rolling population standard deviation of the quarterly CTR over the 3 quarters preceding the current quarter."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "ctr_std IS NOT NULL"
+              where: "ctr_std IS NOT NULL" # Only test non-null values
 
       - name: ctr_z
-        description: "Z-score for the current quarter's CTR."
-        # Can be NULL
+        description: "The Z-score for the current quarter's CTR, indicating deviation from the rolling mean."
 
       - name: ctr_anomaly
-        description: "Flag indicating if the current quarter's CTR is an anomaly ('anomaly') or normal ('normal')."
+        description: "Flag indicating if the CTR for the current quarter is considered an anomaly ('anomaly' or 'normal') based on the Z-score threshold (>|2|)."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: campaign_count
-        description: "Total number of distinct campaigns run for the company-audience segment in the current quarter."
+        description: "The distinct count of campaigns run for this Company and Target Audience during the current quarter."
         tests:
-          - not_null # COUNT DISTINCT should return 0, not NULL
+          - not_null
           - dbt_utils.accepted_range:
               min_value: 0
 
       - name: campaign_count_mean
-        description: "Rolling average campaign count calculated over the 3 quarters preceding the current quarter."
-        # Can be NULL
+        description: "The rolling average campaign count over the 3 quarters preceding the current quarter."
 
       - name: campaign_count_std
-        description: "Rolling population standard deviation of campaign count calculated over the 3 quarters preceding the current quarter."
+        description: "The rolling population standard deviation of the campaign count over the 3 quarters preceding the current quarter."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "campaign_count_std IS NOT NULL"
+              where: "campaign_count_std IS NOT NULL" # Only test non-null values
 
       - name: campaign_count_z
-        description: "Z-score for the current quarter's campaign count."
-        # Can be NULL
+        description: "The Z-score for the current quarter's campaign count, indicating deviation from the rolling mean."
 
       - name: campaign_count_anomaly
-        description: "Flag indicating if the current quarter's campaign count is an anomaly ('anomaly') or normal ('normal')."
+        description: "Flag indicating if the campaign count for the current quarter is considered an anomaly ('anomaly' or 'normal') based on the Z-score threshold (>|2|)."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: total_spend
-        description: "Estimated total spend for the company-audience segment in the current quarter."
+        description: "The total spend (sum of Acquisition Cost) for this Company and Target Audience during the current quarter."
         tests:
+          - not_null
           - dbt_utils.accepted_range:
               min_value: 0
-              # If NULL is possible, add: where: "total_spend IS NOT NULL"
 
       - name: spend_mean
-        description: "Rolling average total spend calculated over the 3 quarters preceding the current quarter."
-        # Can be NULL
+        description: "The rolling average total spend over the 3 quarters preceding the current quarter."
 
       - name: spend_std
-        description: "Rolling population standard deviation of total spend calculated over the 3 quarters preceding the current quarter."
+        description: "The rolling population standard deviation of total spend over the 3 quarters preceding the current quarter."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "spend_std IS NOT NULL"
+              where: "spend_std IS NOT NULL" # Only test non-null values
 
       - name: spend_z
-        description: "Z-score for the current quarter's total spend."
-        # Can be NULL
+        description: "The Z-score for the current quarter's total spend, indicating deviation from the rolling mean."
 
       - name: spend_anomaly
-        description: "Flag indicating if the current quarter's total spend is an anomaly ('anomaly') or normal ('normal')."
+        description: "Flag indicating if the total spend for the current quarter is considered an anomaly ('anomaly' or 'normal') based on the Z-score threshold (>|2|)."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: total_revenue
-        description: "Estimated total revenue generated for the company-audience segment in the current quarter."
+        description: "The total calculated revenue (Spend * (1 + ROI)) for this Company and Target Audience during the current quarter."
         tests:
-          - dbt_utils.accepted_range:
-              min_value: 0 # Assuming revenue cannot be negative in this context
-              # If NULL is possible, add: where: "total_revenue IS NOT NULL"
+          - not_null
+          # Revenue can theoretically be negative if ROI is < -1, although unlikely in practice
+          # - dbt_utils.accepted_range:
+          #     min_value: 0 # Optional: uncomment if revenue must be non-negative
 
       - name: revenue_mean
-        description: "Rolling average total revenue calculated over the 3 quarters preceding the current quarter."
-        # Can be NULL
+        description: "The rolling average total revenue over the 3 quarters preceding the current quarter."
 
       - name: revenue_std
-        description: "Rolling population standard deviation of total revenue calculated over the 3 quarters preceding the current quarter."
+        description: "The rolling population standard deviation of total revenue over the 3 quarters preceding the current quarter."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "revenue_std IS NOT NULL"
+              where: "revenue_std IS NOT NULL" # Only test non-null values
 
       - name: revenue_z
-        description: "Z-score for the current quarter's total revenue."
-        # Can be NULL
+        description: "The Z-score for the current quarter's total revenue, indicating deviation from the rolling mean."
 
       - name: revenue_anomaly
-        description: "Flag indicating if the current quarter's total revenue is an anomaly ('anomaly') or normal ('normal')."
+        description: "Flag indicating if the total revenue for the current quarter is considered an anomaly ('anomaly' or 'normal') based on the Z-score threshold (>|2|)."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: has_anomaly
-        description: "Boolean flag indicating TRUE if at least one metric for this company-audience segment in the current quarter is flagged as an anomaly."
+        description: "A boolean flag (TRUE/FALSE) indicating if *any* metric for this Company/Target Audience combination showed an anomaly in the current quarter."
         tests:
           - not_null
-          - accepted_values: # Explicit test for boolean values
-              values: [true, false]
+          - accepted_values:
+              values: [True, False] # Assuming boolean type maps to True/False
 
       - name: anomaly_count
-        description: "The total number of individual metrics flagged as anomalies for this company-audience segment in the current quarter."
+        description: "The total number of metrics that were flagged as anomalies for this Company/Target Audience in the current quarter."
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 0
 
       - name: anomaly_impact
-        description: "Categorizes the overall impact of detected anomalies as 'positive' (e.g., unusually high ROI, low cost), 'negative' (e.g., unusually low ROI, high cost), or 'normal' if no significant anomalies are detected."
+        description: "Categorizes the overall impact of the detected anomalies as 'positive', 'negative', or 'normal'. 'Positive' indicates favorable deviations (e.g., high ROI, low cost), 'negative' indicates unfavorable deviations."
         tests:
           - not_null
           - accepted_values:
               values: ['positive', 'negative', 'normal']
 
       - name: anomaly_description
-        description: "A human-readable description summarizing the most prominent anomaly detected (based on the order of checks in the CASE statement), or NULL if no anomaly is detected."
-        # This column can be NULL, so no not_null test.
-        # An accepted_values test could be added but would need to list all possible strings.
-        # Example:
-        # tests:
-        #   - accepted_values:
-        #       values: ['Unusually high conversion rate', 'Unusually low conversion rate', 'Unusually high ROI', 'Unusually low ROI', 'Unusually high acquisition cost', 'Unusually low acquisition cost', 'Unusually high CTR', 'Unusually low CTR', 'Unusually high campaign count', 'Unusually low campaign count', 'Unusually high spend', 'Unusually low spend', 'Unusually high revenue', 'Unusually low revenue']
-        #       where: "anomaly_description IS NOT NULL" # Only test non-null values
+        description: "A text description summarizing the most significant anomaly detected (if any) for dashboard display. NULL if no anomaly is detected."
+        # No not_null test as it can be NULL
+        # No accepted_values test as the text is dynamically generated

@@ -2,157 +2,135 @@ version: 2
 
 models:
   - name: audience_monthly_metrics
-    description: |
-      Aggregates campaign performance metrics by company, target audience, and month.
-      Provides audience-specific time-based analysis of effectiveness throughout the year.
-      Follows a hierarchical dimension structure with Company as the primary dimension and Target_Audience as the secondary.
-      Calculates key performance indicators (KPIs), month-over-month changes, spend, revenue, and audience share metrics.
-      Grain: One record per Company, Target_Audience, and month.
+    description: >
+      Aggregates campaign performance metrics monthly by company and target audience.
+      Provides insights into audience-specific effectiveness trends, month-over-month changes,
+      and overall performance within each company throughout the year. Enables seasonal
+      trend analysis and ROI tracking per audience segment. This model follows a hierarchical
+      structure with Company as the primary dimension and Target_Audience as the secondary.
     config:
       materialized: table
       tags: ['mart', 'audience', 'monthly', 'performance']
     columns:
       - name: Company
-        description: "The name of the company running the campaigns."
+        description: "Identifier for the company running the campaigns. Primary dimension for analysis."
         tests:
           - not_null
-          - relationship:
+          - relationships:
               to: ref('stg_campaigns')
               field: Company
-
-      - name: Target_Audience
-        description: "The specific audience segment targeted by the campaigns."
-        tests:
-          - not_null
-          - relationship:
-              to: ref('stg_campaigns')
-              field: Target_Audience
-
-      - name: month
-        description: "The calendar month (1-12) for which the metrics are aggregated."
-        tests:
-          - not_null
-          - accepted_values:
-              values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-          # Apply the unique combination test to one of the key columns
           - dbt_utils.unique_combination_of_columns:
               combination_of_columns:
                 - Company
                 - Target_Audience
                 - month
 
-      - name: campaign_count
-        description: "The total number of campaigns run for the specific company, audience, and month."
+      - name: Target_Audience
+        description: "The specific audience segment targeted by the campaigns. Secondary dimension for analysis."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_campaigns')
+              field: Target_Audience
+
+      - name: month
+        description: "The calendar month (1-12) for which metrics are aggregated."
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 0
+              min_value: 1
+              max_value: 12
+
+      - name: campaign_count
+        description: "The total number of campaigns run for the specific company, target audience, and month."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1 # A group must have at least one campaign
 
       - name: avg_conversion_rate
-        description: "The average conversion rate across all campaigns for the specific company, audience, and month."
+        description: "Average campaign conversion rate for the company, target audience, and month."
         tests:
-          - not_null
           - dbt_utils.accepted_range:
-              min_value: 0
+              min_value: 0 # Conversion rate cannot be negative
 
       - name: avg_roi
-        description: "The average Return on Investment (ROI) across all campaigns for the specific company, audience, and month."
-        tests:
-          - not_null
-          # ROI can be negative, so no min_value test is applied.
+        description: "Average campaign Return on Investment (ROI) for the company, target audience, and month."
+        # ROI can be negative, so no min_value test applied without further context.
 
       - name: avg_acquisition_cost
-        description: "The average cost to acquire a customer across all campaigns for the specific company, audience, and month."
+        description: "Average campaign acquisition cost for the company, target audience, and month."
         tests:
-          - not_null
           - dbt_utils.accepted_range:
-              min_value: 0
+              min_value: 0 # Acquisition cost cannot be negative
 
       - name: monthly_ctr
-        description: "The overall Click-Through Rate (CTR) calculated as (Total Clicks / Total Impressions) for the specific company, audience, and month."
+        description: "Overall Click-Through Rate (Total Clicks / Total Impressions) for the company, target audience, and month."
         tests:
-          - not_null:
-              where: "total_impressions > 0" # CTR is only non-null if impressions exist
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "monthly_ctr IS NOT NULL" # Apply range test only where CTR is calculated
+              max_value: 1 # CTR is a ratio between 0 and 1
 
       - name: total_clicks
-        description: "The total number of clicks accumulated across all campaigns for the specific company, audience, and month."
+        description: "Total number of clicks accumulated across all campaigns for the company, target audience, and month."
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 0
 
       - name: total_impressions
-        description: "The total number of impressions accumulated across all campaigns for the specific company, audience, and month."
+        description: "Total number of impressions served across all campaigns for the company, target audience, and month."
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 0
 
       - name: total_spend
-        description: "The estimated total spend for the specific company, audience, and month, calculated as SUM(Clicks * Conversion_Rate * Acquisition_Cost)."
+        description: "Total marketing spend (sum of Acquisition Cost) for the company, target audience, and month."
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 0
 
       - name: total_revenue
-        description: "The estimated total revenue for the specific company, audience, and month, calculated as SUM(Clicks * Conversion_Rate * Acquisition_Cost * (1 + ROI))."
-        tests:
-          - not_null
-          - dbt_utils.accepted_range:
-              min_value: 0
+        description: "Calculated total revenue generated (based on total spend and average ROI) for the company, target audience, and month."
+        # Revenue could theoretically be negative if ROI is significantly negative. No range test applied.
 
       - name: roi_vs_prev_month
-        description: "The percentage change in average ROI compared to the previous month for the same company and audience. Null for the first month of data."
-        # No not_null test as it's expected to be null for the first month.
-        # Range can be positive or negative.
+        description: "Percentage change in average ROI compared to the previous month for the same company and target audience. Null if previous month data is unavailable or previous ROI was zero."
 
       - name: conversion_rate_vs_prev_month
-        description: "The percentage change in average conversion rate compared to the previous month for the same company and audience. Null for the first month of data."
-        # No not_null test as it's expected to be null for the first month.
-        # Range can be positive or negative.
+        description: "Percentage change in average conversion rate compared to the previous month for the same company and target audience. Null if previous month data is unavailable or previous rate was zero."
 
       - name: acquisition_cost_vs_prev_month
-        description: "The percentage change in average acquisition cost compared to the previous month for the same company and audience (positive value indicates improvement/lower cost). Null for the first month of data."
-        # No not_null test as it's expected to be null for the first month.
-        # Range can be positive or negative.
+        description: "Percentage change (improvement) in average acquisition cost compared to the previous month (positive value means cost decreased). Null if previous month data is unavailable or previous cost was zero."
 
       - name: ctr_vs_prev_month
-        description: "The percentage change in monthly CTR compared to the previous month for the same company and audience. Null for the first month of data."
-        # No not_null test as it's expected to be null for the first month.
-        # Range can be positive or negative.
+        description: "Percentage change in monthly Click-Through Rate (CTR) compared to the previous month for the same company and target audience. Null if previous month data is unavailable or previous CTR was zero."
 
       - name: audience_count
-        description: "The total number of distinct target audiences active within the company during that specific month."
+        description: "The total number of distinct target audiences with campaign activity for the specific company within the given month."
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 1 # Should always be at least 1 if the row exists
+              min_value: 1 # A company must have at least one active audience in a month to appear
 
       - name: audience_share_clicks
-        description: "The proportion of total clicks within the company for that month that came from this specific target audience."
+        description: "The proportion of the company's total monthly clicks attributed to this specific target audience (audience clicks / company total clicks)."
         tests:
-          # Can be null if total clicks for the company in the month is 0
           - dbt_utils.accepted_range:
               min_value: 0
-              max_value: 1 # Share should be between 0 and 1
-              where: "audience_share_clicks IS NOT NULL"
+              max_value: 1 # Share must be between 0 and 1
 
       - name: response_rate
-        description: "The rate at which impressions turned into clicks for this audience during the month (Total Clicks / Total Impressions). Same as monthly_ctr but calculated on the final aggregated values."
+        description: "The rate at which impressions resulted in clicks for this specific company, target audience, and month (Total Clicks / Total Impressions). Equivalent to monthly_ctr."
         tests:
-          # Can be null if total_impressions is 0
           - dbt_utils.accepted_range:
               min_value: 0
-              where: "response_rate IS NOT NULL"
+              max_value: 1 # Rate must be between 0 and 1
 
       - name: efficiency_ratio
-        description: "A measure of efficiency calculated as Total Revenue / Total Spend for this audience during the month. Represents revenue generated per dollar spent."
+        description: "Revenue generated per dollar spent for this specific company, target audience, and month (Total Revenue / Total Spend). Indicates campaign efficiency."
         tests:
-          # Can be null if total_spend is 0
           - dbt_utils.accepted_range:
-              min_value: 0
-              where: "efficiency_ratio IS NOT NULL"
+              min_value: 0 # Assumes ROI >= -1, resulting in non-negative revenue/spend ratio

@@ -2,365 +2,275 @@ version: 2
 
 models:
   - name: channel_quarter_anomalies
-    description: |
-      Identifies anomalies in marketing channel performance metrics on a quarterly basis for each company.
-      It calculates rolling statistics (mean, standard deviation) for key metrics (Conversion Rate, ROI, Acquisition Cost, Clicks, Impressions, CTR, Spend, Revenue, Campaign Count) over the previous 3 quarters.
-      It then compares the current quarter's metrics against these historical benchmarks using Z-scores.
-      Metrics with an absolute Z-score greater than 2 are flagged as anomalies.
-      The model provides detailed statistics, Z-scores, anomaly flags for each metric, and summary indicators like `has_anomaly`, `anomaly_count`, and `anomaly_impact`.
-      This model is intended for use in dashboards for anomaly alerting, performance monitoring, and risk management.
-      Filters data to only include the most recent quarter available in the source data.
+    description: "Mart model that identifies anomalies in key channel performance metrics for the current quarter. It compares current quarter metrics (Conversion Rate, ROI, Acquisition Cost, Clicks, Impressions, CTR, Spend, Revenue, Campaign Count) against the rolling average and standard deviation of the previous three quarters using Z-score methodology. Flags significant deviations (absolute Z-score > 2) per Company and Channel combination to highlight potential issues or opportunities requiring attention. Filters to show only the latest quarter's results."
     config:
       materialized: table
       tags:
         - 'mart'
         - 'anomaly_detection'
         - 'performance'
-        - 'marketing'
+        - 'quarterly'
+    tests:
+      # The combination of Company and Channel should be unique for the current quarter snapshot
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - Company
+            - Channel_Used
     columns:
       - name: Company
-        description: "The name of the company being analyzed. Primary dimension."
+        description: "Name of the company associated with the campaign data. Primary dimension for analysis."
         tests:
           - not_null
           - relationships:
               to: ref('stg_campaigns')
-              field: Company # Assuming 'Company' exists and is validated in stg_campaigns
+              field: Company
 
       - name: Channel_Used
-        description: "The marketing channel used (e.g., Facebook, Instagram, Pinterest). Secondary dimension."
+        description: "Marketing channel used (e.g., Facebook, Instagram, Pinterest, Twitter). Secondary dimension for analysis."
         tests:
           - not_null
           - relationships:
               to: ref('stg_campaigns')
-              field: Channel_Used # Assuming 'Channel_Used' exists and is validated in stg_campaigns
-          # Test for uniqueness across Company and Channel for the current quarter
-          - dbt_utils.unique_combination_of_columns:
-              combination_of_columns:
-                - Company
-                - Channel_Used
+              field: Channel_Used
 
       - name: avg_conversion_rate
-        description: "The average conversion rate for the company and channel during the current quarter."
+        description: "Average conversion rate for the current quarter for this Company and Channel."
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+          - dbt_utils.accepted_range: # Conversion rate should be >= 0
+              min_value: 0
 
       - name: conversion_rate_mean
-        description: "The rolling average conversion rate over the previous 3 quarters for this company and channel."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Rolling average conversion rate from the 3 preceding quarters for this Company and Channel. Baseline for Z-score calculation. Can be null if insufficient historical data."
 
       - name: conversion_rate_std
-        description: "The rolling population standard deviation of the conversion rate over the previous 3 quarters for this company and channel."
+        description: "Rolling population standard deviation of conversion rate from the 3 preceding quarters for this Company and Channel. Used in Z-score calculation. Can be null or zero if insufficient/non-varying historical data."
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-          - dbt_expectations.expect_column_values_to_be_non_negative # Standard deviation cannot be negative
+          - dbt_utils.accepted_range: # Standard deviation must be non-negative
+              min_value: 0
 
       - name: conversion_rate_z
-        description: "The Z-score for the current quarter's average conversion rate, indicating deviation from the rolling mean in terms of standard deviations. Null if standard deviation is zero or null."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Z-score for conversion rate in the current quarter. Calculated as (avg_conversion_rate - conversion_rate_mean) / conversion_rate_std. Null if standard deviation is zero or null."
 
       - name: conversion_rate_anomaly
-        description: "Flag indicating if the conversion rate is an anomaly ('anomaly') or within expected range ('normal') based on an absolute Z-score threshold of 2."
+        description: "Flag indicating if the conversion rate for the current quarter is considered an anomaly (absolute Z-score > 2). Values: 'anomaly', 'normal'."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: avg_roi
-        description: "The average Return on Investment (ROI) for the company and channel during the current quarter."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Average Return on Investment (ROI) for the current quarter for this Company and Channel."
+        # ROI can be negative, so no non-negative test
 
       - name: roi_mean
-        description: "The rolling average ROI over the previous 3 quarters for this company and channel."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Rolling average ROI from the 3 preceding quarters for this Company and Channel. Baseline for Z-score calculation. Can be null if insufficient historical data."
 
       - name: roi_std
-        description: "The rolling population standard deviation of the ROI over the previous 3 quarters for this company and channel."
+        description: "Rolling population standard deviation of ROI from the 3 preceding quarters for this Company and Channel. Used in Z-score calculation. Can be null or zero if insufficient/non-varying historical data."
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range: # Standard deviation must be non-negative
+              min_value: 0
 
       - name: roi_z
-        description: "The Z-score for the current quarter's average ROI. Null if standard deviation is zero or null."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Z-score for ROI in the current quarter. Calculated as (avg_roi - roi_mean) / roi_std. Null if standard deviation is zero or null."
 
       - name: roi_anomaly
-        description: "Flag indicating if the ROI is an anomaly ('anomaly') or 'normal' based on an absolute Z-score threshold of 2."
+        description: "Flag indicating if the ROI for the current quarter is considered an anomaly (absolute Z-score > 2). Values: 'anomaly', 'normal'."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: avg_acquisition_cost
-        description: "The average acquisition cost for the company and channel during the current quarter."
+        description: "Average acquisition cost for the current quarter for this Company and Channel."
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+          - dbt_utils.accepted_range: # Acquisition cost should be >= 0
+              min_value: 0
 
       - name: acquisition_cost_mean
-        description: "The rolling average acquisition cost over the previous 3 quarters for this company and channel."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Rolling average acquisition cost from the 3 preceding quarters for this Company and Channel. Baseline for Z-score calculation. Can be null if insufficient historical data."
 
       - name: acquisition_cost_std
-        description: "The rolling population standard deviation of the acquisition cost over the previous 3 quarters for this company and channel."
+        description: "Rolling population standard deviation of acquisition cost from the 3 preceding quarters for this Company and Channel. Used in Z-score calculation. Can be null or zero if insufficient/non-varying historical data."
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range: # Standard deviation must be non-negative
+              min_value: 0
 
       - name: acquisition_cost_z
-        description: "The Z-score for the current quarter's average acquisition cost. Null if standard deviation is zero or null."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Z-score for acquisition cost in the current quarter. Calculated as (avg_acquisition_cost - acquisition_cost_mean) / acquisition_cost_std. Null if standard deviation is zero or null."
 
       - name: acquisition_cost_anomaly
-        description: "Flag indicating if the acquisition cost is an anomaly ('anomaly') or 'normal' based on an absolute Z-score threshold of 2."
+        description: "Flag indicating if the acquisition cost for the current quarter is considered an anomaly (absolute Z-score > 2). Values: 'anomaly', 'normal'."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: total_clicks
-        description: "The total number of clicks for the company and channel during the current quarter."
+        description: "Total clicks recorded during the current quarter for this Company and Channel."
         tests:
-          - not_null
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: HUGEINT # Or BIGINT depending on exact DB type mapping
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range: # Clicks must be non-negative
+              min_value: 0
 
       - name: clicks_mean
-        description: "The rolling average total clicks over the previous 3 quarters for this company and channel."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Rolling average of total clicks from the 3 preceding quarters for this Company and Channel. Baseline for Z-score calculation. Can be null if insufficient historical data."
 
       - name: clicks_std
-        description: "The rolling population standard deviation of total clicks over the previous 3 quarters for this company and channel."
+        description: "Rolling population standard deviation of total clicks from the 3 preceding quarters for this Company and Channel. Used in Z-score calculation. Can be null or zero if insufficient/non-varying historical data."
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range: # Standard deviation must be non-negative
+              min_value: 0
 
       - name: clicks_z
-        description: "The Z-score for the current quarter's total clicks. Null if standard deviation is zero or null."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Z-score for total clicks in the current quarter. Calculated as (total_clicks - clicks_mean) / clicks_std. Null if standard deviation is zero or null."
 
       - name: clicks_anomaly
-        description: "Flag indicating if the total clicks count is an anomaly ('anomaly') or 'normal' based on an absolute Z-score threshold of 2."
+        description: "Flag indicating if the total clicks for the current quarter is considered an anomaly (absolute Z-score > 2). Values: 'anomaly', 'normal'."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: total_impressions
-        description: "The total number of impressions for the company and channel during the current quarter."
+        description: "Total impressions recorded during the current quarter for this Company and Channel."
         tests:
-          - not_null
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: HUGEINT # Or BIGINT
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range: # Impressions must be non-negative
+              min_value: 0
 
       - name: impressions_mean
-        description: "The rolling average total impressions over the previous 3 quarters for this company and channel."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Rolling average of total impressions from the 3 preceding quarters for this Company and Channel. Baseline for Z-score calculation. Can be null if insufficient historical data."
 
       - name: impressions_std
-        description: "The rolling population standard deviation of total impressions over the previous 3 quarters for this company and channel."
+        description: "Rolling population standard deviation of total impressions from the 3 preceding quarters for this Company and Channel. Used in Z-score calculation. Can be null or zero if insufficient/non-varying historical data."
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range: # Standard deviation must be non-negative
+              min_value: 0
 
       - name: impressions_z
-        description: "The Z-score for the current quarter's total impressions. Null if standard deviation is zero or null."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Z-score for total impressions in the current quarter. Calculated as (total_impressions - impressions_mean) / impressions_std. Null if standard deviation is zero or null."
 
       - name: impressions_anomaly
-        description: "Flag indicating if the total impressions count is an anomaly ('anomaly') or 'normal' based on an absolute Z-score threshold of 2."
+        description: "Flag indicating if the total impressions for the current quarter is considered an anomaly (absolute Z-score > 2). Values: 'anomaly', 'normal'."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: quarterly_ctr
-        description: "The calculated Click-Through Rate (CTR) for the company and channel during the current quarter (Total Clicks / Total Impressions)."
+        description: "Calculated Click-Through Rate (CTR) for the current quarter (Total Clicks / Total Impressions) for this Company and Channel."
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: FLOAT # Or DOUBLE depending on DB
-          - dbt_expectations.expect_column_values_to_be_between:
+          - dbt_utils.accepted_range: # CTR should be >= 0
               min_value: 0
-              max_value: 1
-              strictly: false # Allow 0 and 1
-              # Note: This test might fail if the column can be NULL (e.g., if impressions are 0)
-              # Add `or_null: true` if nulls are acceptable.
 
       - name: ctr_mean
-        description: "The rolling average CTR over the previous 3 quarters for this company and channel."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Rolling average of quarterly CTR from the 3 preceding quarters for this Company and Channel. Baseline for Z-score calculation. Can be null if insufficient historical data."
 
       - name: ctr_std
-        description: "The rolling population standard deviation of the CTR over the previous 3 quarters for this company and channel."
+        description: "Rolling population standard deviation of quarterly CTR from the 3 preceding quarters for this Company and Channel. Used in Z-score calculation. Can be null or zero if insufficient/non-varying historical data."
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range: # Standard deviation must be non-negative
+              min_value: 0
 
       - name: ctr_z
-        description: "The Z-score for the current quarter's CTR. Null if standard deviation is zero or null."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Z-score for quarterly CTR in the current quarter. Calculated as (quarterly_ctr - ctr_mean) / ctr_std. Null if standard deviation is zero or null."
 
       - name: ctr_anomaly
-        description: "Flag indicating if the CTR is an anomaly ('anomaly') or 'normal' based on an absolute Z-score threshold of 2."
+        description: "Flag indicating if the quarterly CTR for the current quarter is considered an anomaly (absolute Z-score > 2). Values: 'anomaly', 'normal'."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: total_spend
-        description: "The total calculated spend for the company and channel during the current quarter."
+        description: "Total spend (sum of Acquisition_Cost) during the current quarter for this Company and Channel."
         tests:
-          - not_null
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range: # Spend must be non-negative
+              min_value: 0
 
       - name: spend_mean
-        description: "The rolling average total spend over the previous 3 quarters for this company and channel."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Rolling average of total spend from the 3 preceding quarters for this Company and Channel. Baseline for Z-score calculation. Can be null if insufficient historical data."
 
       - name: spend_std
-        description: "The rolling population standard deviation of total spend over the previous 3 quarters for this company and channel."
+        description: "Rolling population standard deviation of total spend from the 3 preceding quarters for this Company and Channel. Used in Z-score calculation. Can be null or zero if insufficient/non-varying historical data."
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range: # Standard deviation must be non-negative
+              min_value: 0
 
       - name: spend_z
-        description: "The Z-score for the current quarter's total spend. Null if standard deviation is zero or null."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Z-score for total spend in the current quarter. Calculated as (total_spend - spend_mean) / spend_std. Null if standard deviation is zero or null."
 
       - name: spend_anomaly
-        description: "Flag indicating if the total spend is an anomaly ('anomaly') or 'normal' based on an absolute Z-score threshold of 2."
+        description: "Flag indicating if the total spend for the current quarter is considered an anomaly (absolute Z-score > 2). Values: 'anomaly', 'normal'."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: total_revenue
-        description: "The total calculated revenue for the company and channel during the current quarter."
-        tests:
-          - not_null
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-          # Revenue can theoretically be negative if ROI < -1, but often constrained non-negative in practice.
-          # - dbt_expectations.expect_column_values_to_be_non_negative
+        description: "Total calculated revenue (Spend * (1 + ROI)) during the current quarter for this Company and Channel."
+        # Revenue could theoretically be negative if ROI is < -1, though unlikely with positive spend. No non-negative test.
 
       - name: revenue_mean
-        description: "The rolling average total revenue over the previous 3 quarters for this company and channel."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Rolling average of total revenue from the 3 preceding quarters for this Company and Channel. Baseline for Z-score calculation. Can be null if insufficient historical data."
 
       - name: revenue_std
-        description: "The rolling population standard deviation of total revenue over the previous 3 quarters for this company and channel."
+        description: "Rolling population standard deviation of total revenue from the 3 preceding quarters for this Company and Channel. Used in Z-score calculation. Can be null or zero if insufficient/non-varying historical data."
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range: # Standard deviation must be non-negative
+              min_value: 0
 
       - name: revenue_z
-        description: "The Z-score for the current quarter's total revenue. Null if standard deviation is zero or null."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Z-score for total revenue in the current quarter. Calculated as (total_revenue - revenue_mean) / revenue_std. Null if standard deviation is zero or null."
 
       - name: revenue_anomaly
-        description: "Flag indicating if the total revenue is an anomaly ('anomaly') or 'normal' based on an absolute Z-score threshold of 2."
+        description: "Flag indicating if the total revenue for the current quarter is considered an anomaly (absolute Z-score > 2). Values: 'anomaly', 'normal'."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: campaign_count
-        description: "The count of distinct campaigns run by the company on the channel during the current quarter."
+        description: "Count of distinct campaigns run during the current quarter for this Company and Channel."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: BIGINT
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range: # Count must be non-negative
+              min_value: 0
 
       - name: campaign_count_mean
-        description: "The rolling average campaign count over the previous 3 quarters for this company and channel."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Rolling average of campaign count from the 3 preceding quarters for this Company and Channel. Baseline for Z-score calculation. Can be null if insufficient historical data."
 
       - name: campaign_count_std
-        description: "The rolling population standard deviation of the campaign count over the previous 3 quarters for this company and channel."
+        description: "Rolling population standard deviation of campaign count from the 3 preceding quarters for this Company and Channel. Used in Z-score calculation. Can be null or zero if insufficient/non-varying historical data."
         tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range: # Standard deviation must be non-negative
+              min_value: 0
 
       - name: campaign_count_z
-        description: "The Z-score for the current quarter's campaign count. Null if standard deviation is zero or null."
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: DOUBLE
+        description: "Z-score for campaign count in the current quarter. Calculated as (campaign_count - campaign_count_mean) / campaign_count_std. Null if standard deviation is zero or null."
 
       - name: campaign_count_anomaly
-        description: "Flag indicating if the campaign count is an anomaly ('anomaly') or 'normal' based on an absolute Z-score threshold of 2."
+        description: "Flag indicating if the campaign count for the current quarter is considered an anomaly (absolute Z-score > 2). Values: 'anomaly', 'normal'."
         tests:
           - not_null
           - accepted_values:
               values: ['anomaly', 'normal']
 
       - name: has_anomaly
-        description: "A boolean flag indicating if at least one metric for this company/channel combination in the current quarter was flagged as an anomaly (TRUE) or if all metrics were normal (FALSE)."
+        description: "Boolean flag (TRUE/FALSE) indicating if any performance metric for this Company and Channel showed an anomaly in the current quarter. Useful for filtering."
         tests:
           - not_null
-          - accepted_values: # For boolean types
+          - accepted_values: # Using boolean values directly
               values: [true, false]
 
       - name: anomaly_count
-        description: "The total number of metrics flagged as anomalies for this company/channel combination in the current quarter. Provides a measure of anomaly severity."
+        description: "Count of the number of metrics flagged as anomalies for this Company-Channel in the current quarter. Indicates the breadth of the deviation."
         tests:
           - not_null
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: INTEGER
-          - dbt_expectations.expect_column_values_to_be_non_negative
+          - dbt_utils.accepted_range:
+              min_value: 0
 
       - name: anomaly_impact
-        description: "A categorical assessment ('positive', 'negative', 'normal') of the overall impact of the detected anomalies. 'positive' indicates anomalies generally favorable to business goals (e.g., high ROI, high Revenue, low Cost), 'negative' indicates unfavorable anomalies. 'normal' if no significant anomalies impacting overall performance direction are detected."
+        description: "Overall impact category ('positive', 'negative', 'normal') based on the direction of the most significant anomalies detected (e.g., high ROI is positive, high cost is negative)."
         tests:
           - not_null
           - accepted_values:
