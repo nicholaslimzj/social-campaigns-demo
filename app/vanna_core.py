@@ -93,6 +93,44 @@ class MetaVannaCore:
         os.makedirs(chroma_path, exist_ok=True)
         logger.info(f"Using ChromaDB path: {chroma_path}")
         
+        # Function to preload the embedding model
+        def preload_embedding_model():
+            try:
+                logger.info("Preloading Chroma embedding model...")
+                from chromadb.utils import embedding_functions
+                
+                # Path to the pre-unpacked model directory
+                model_cache_dir = os.path.join(DATA_ROOT_PATH, 'chroma_models')
+                model_name = "all-MiniLM-L6-v2"
+                
+                # Check if we have the pre-unpacked model directory
+                pre_unpacked_path = os.path.join(model_cache_dir, 'models--sentence-transformers--all-MiniLM-L6-v2')
+                if os.path.exists(pre_unpacked_path):
+                    logger.info(f"Using pre-unpacked model at: {pre_unpacked_path}")
+                    # Use the pre-unpacked model by setting the cache_folder to its parent directory
+                    sentence_transformer_ef = embedding_functions.SentenceTransformerEmbeddingFunction(
+                        model_name=model_name,
+                        cache_folder=model_cache_dir
+                    )
+                else:
+                    logger.info(f"Pre-unpacked model not found, downloading to: {model_cache_dir}")
+                    # Download the model if the pre-unpacked version isn't available
+                    sentence_transformer_ef = embedding_functions.SentenceTransformerEmbeddingFunction(
+                        model_name=model_name,
+                        cache_folder=model_cache_dir
+                    )
+                
+                # Test the embedding function to ensure it's loaded
+                _ = sentence_transformer_ef(["Test sentence to ensure model is loaded"])
+                logger.info("Chroma embedding model successfully preloaded")
+                return sentence_transformer_ef
+            except Exception as e:
+                logger.warning(f"Failed to preload embedding model: {e}")
+                return None
+        
+        # Preload the embedding model
+        embedding_function = preload_embedding_model()
+        
         # Initialize Vanna with ChromaDB and GoogleGeminiChat
         class MyVanna(ChromaDB_VectorStore, GoogleGeminiChat):
             def __init__(self, config=None):
@@ -106,12 +144,19 @@ class MetaVannaCore:
                     return 0
                 return super().str_to_approx_token_count(string)
                 
-        self.vn = MyVanna(config={
+        # Configure Vanna with the preloaded embedding function if available
+        config = {
             'api_key': self.api_key, 
             'model': self.model,
             'temperature': self.temperature,
             'path': chroma_path  # Set ChromaDB path to data folder
-        })
+        }
+        
+        # Add the embedding function to the config if it was successfully preloaded
+        if embedding_function:
+            config['embedding_function'] = embedding_function
+        
+        self.vn = MyVanna(config=config)
         
         # Connect to DuckDB for direct queries
         self.conn = duckdb.connect(self.db_path)

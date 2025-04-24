@@ -29,6 +29,12 @@ var/
 /data/db/copy_for_dbeaver.duckdb
 /data/db/*.wal
 
+# Large processed data files (not needed in production)
+/data/processed/
+*.parquet
+*.csv
+/data/raw/
+
 # Docker
 docker-compose.yml
 .dockerignore
@@ -45,3 +51,5 @@ docker-compose.yml
 .env.local
 .env.development
 README.md
+.vercel
+/api_test_results

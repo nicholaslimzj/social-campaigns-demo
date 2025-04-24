@@ -29,6 +29,7 @@ dbt-duckdb~=1.9.0
 # Vanna.ai for natural language to SQL
 vanna[chromadb,gemini,duckdb]~=0.7.0
 vertexai~=1.71.0
+sentence_transformers~=2.7.0
 
 # LangChain for insights generation
 langchain~=0.1.0
