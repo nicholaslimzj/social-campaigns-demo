@@ -758,25 +758,45 @@ class InsightsGenerator:
             # Prepare the data for the LLM prompt
             
             # Directly use the LLM with a simple prompt that includes Tailwind formatting instructions
-            prompt = f"""You are an expert marketing analyst who provides extremely concise, data-driven insights for social media marketing campaigns.
-            
-            Generate a brief, actionable single-paragraph summary for {company_name}'s marketing performance based on this data: {data_json}
-            
-            Format your response as compact HTML with Tailwind CSS classes, following this structure:
-            
-            <p class="text-gray-700">{company_name} experienced a <span class="text-green-500 font-semibold">+X%</span> ROI change with top campaign achieving <span class="text-blue-500 font-semibold">X</span> ROI. Channel <span class="text-blue-500 font-semibold">[name]</span> performed <span class="text-green-500 font-semibold">X%</span> above average ROI, while optimal campaign duration is <span class="text-blue-500 font-semibold">X days</span>. Overall ROI trend is <span class="text-red-500 font-semibold">-Y%</span> suggesting focusing on <span class="text-blue-500 font-semibold">[specific action]</span>.</p>
-            
-            BE EXTREMELY CONCISE. Create a single paragraph with 2-3 sentences maximum. Always highlight numbers and percentages with color spans (green for positive, red for negative, blue for neutral). Include only the most important metrics and actionable insights. The entire output should be very compact to fit in a small dashboard space.
-            
-            IMPORTANT: 
-            1. Follow the exact pattern from the example above, with colored spans for all metrics and numbers. 
-            2. Do not include separate sections or headings - just one concise paragraph.
-            3. Be consistent with percentage values - if ROI change is -0.78%, report it exactly as -0.78%, not as -78% or -120%.
-            4. Do not include backticks or markdown formatting in your response - output only the HTML.
-            5. Make sure all percentage values are consistent with the data provided."""
-            
-            
-            
+            prompt = f"""You are a professional marketing analytics expert providing data-driven insights for enterprise social media marketing campaigns.
+        
+        Generate a concise, professional insight for {company_name}'s marketing performance based on this data: {data_json}
+        
+        Format your response in HTML with Tailwind CSS classes. Be concise but speak directly to the client using a consultative, professional tone. Address the client directly ("Your campaigns...") and provide clear, actionable recommendations.
+        
+        Example formats (vary your approach for each company):
+        
+        FORMAT 1 - OPPORTUNITY IDENTIFICATION:
+        <div class="text-gray-700">
+          <p><span class="text-blue-600 font-semibold">Instagram Performance:</span> Your campaigns show <span class="text-green-500 font-semibold">+24.5%</span> higher ROI with <span class="text-blue-500 font-semibold">Technology</span> audience segments.</p>
+          <p class="mt-2"><strong>Recommendation:</strong> Consider increasing <span class="text-blue-500 font-semibold">technology-focused</span> content allocation.</p>
+        </div>
+        
+        FORMAT 2 - PERFORMANCE INSIGHT:
+        <div class="text-gray-700">
+          <p><span class="text-red-600 font-semibold">ROI Analysis:</span> Your monthly ROI decreased by <span class="text-red-500 font-semibold">-3.2%</span> with <span class="text-blue-500 font-semibold">Fashion</span> campaigns underperforming by <span class="text-red-500 font-semibold">-12%</span>.</p>
+          <p class="mt-2"><strong>Recommendation:</strong> Optimize toward the <span class="text-blue-500 font-semibold">15-day</span> campaign duration for better performance.</p>
+        </div>
+        
+        FORMAT 3 - STRATEGIC RECOMMENDATION:
+        <div class="text-gray-700">
+          <p><span class="text-green-600 font-semibold">Campaign Strategy:</span> Your <span class="text-blue-500 font-semibold">14-day</span> campaigns with <span class="text-blue-500 font-semibold">video</span> content show <span class="text-green-500 font-semibold">+18%</span> higher conversion rates.</p>
+          <p class="mt-2"><strong>Recommendation:</strong> Extend this approach across <span class="text-blue-500 font-semibold">all product categories</span>.</p>
+        </div>
+        
+        IMPORTANT GUIDELINES:
+        1. Use a TWO-PARAGRAPH structure with the following format:
+           - First paragraph: Concise insight with key metrics, addressing the client directly ("Your campaigns...")
+           - Second paragraph: Clear recommendation with "Recommendation:" in bold and a margin-top class (mt-2)
+        2. Start with a descriptive category label (e.g., "Instagram Performance:", "ROI Analysis:", "Campaign Strategy:")
+        3. Use colored spans for all metrics (green for positive, red for negative, blue for neutral/entities)
+        4. Be concise but conversational - use complete sentences that speak directly to the client
+        5. Maintain a professional, consultative tone that balances brevity with engagement
+        6. Be precise with percentage values - if ROI change is -0.78%, report it exactly as -0.78%, not rounded
+        7. Output only the HTML - no backticks or markdown formatting
+        8. Ensure all values are consistent with the data provided
+        9. NEVER add information not supported by the data
+        10. VARY YOUR WORDING AND STRUCTURE - don't use the same template for every company"""
             
             # Log minimal info about the prompt being sent to the LLM
             logger.info(f"Sending prompt for {company_name} insights generation")

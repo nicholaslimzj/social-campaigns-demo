@@ -251,7 +251,7 @@ class MetaLlamaIndexCore:
                 # Create a list of key tables to prioritize
                 key_tables = []
                 for table in tables:
-                    if table in ["stg_campaigns", "campaign_monthly_metrics", "metrics_monthly_anomalies", "campaign_month_performance_rankings"]:
+                    if table in ["campaign_monthly_metrics", "metrics_monthly_anomalies", "campaign_month_performance_rankings"]:
                         key_tables.append(table)
                 
                 # If we have our key tables, use only those; otherwise use all tables
@@ -355,8 +355,46 @@ class MetaLlamaIndexCore:
             
             # Step 4: Generate a descriptive analysis of the results using the LLM
             description = ""
-            if results_data and len(results_data) > 0:
-                try:
+            try:
+                # Handle empty results differently than results with data
+                if not results_data or len(results_data) == 0:
+                    # Generate a helpful message for empty results
+                    empty_results_prompt = f"""The following SQL query returned no results:
+                    
+                    Question: {question}
+                    
+                    SQL Query:
+                    {sql}
+                    
+                    First, evaluate whether the SQL query actually addresses the question asked. Then provide an appropriate response.
+                    
+                    Guidelines:
+                    1. FIRST, determine if the query properly addresses the question:
+                       - Does the query search for the right information?
+                       - Does it use appropriate tables and filters?
+                       - Is it logically connected to what was asked?
+                    
+                    2. If the query DOES NOT match the question well:
+                       - Explain that the system couldn't find the specific information requested
+                       - Be professional and direct
+                       - Don't blame the user or the system
+                       - Example: "We couldn't find specific information about social media marketing challenges for Attire Artistry. The available data focuses on performance metrics rather than qualitative challenges."
+                    
+                    3. If the query DOES match the question well:
+                       - Explain what the absence of data likely means in business terms
+                       - Be direct but professional
+                       - Example: "No underperforming social media campaigns were found for Attire Artistry. This suggests their social media marketing is performing at or above expectations."
+                    
+                    4. General requirements:
+                       - Keep your response VERY CONCISE (1-2 sentences)
+                       - Don't be overly apologetic or technical
+                       - Don't quote SQL or table names
+                       - Maintain a professional tone
+                    """
+                    
+                    description = Settings.llm.complete(empty_results_prompt).text
+                    logger.info("Generated explanation for empty results")
+                else:
                     # Convert results to a readable format for the LLM
                     results_str = "\n".join([str(row) for row in results_data[:10]])
                     if len(results_data) > 10:
@@ -390,9 +428,9 @@ class MetaLlamaIndexCore:
                     
                     description = Settings.llm.complete(analysis_prompt).text
                     logger.info("Generated analysis for the results")
-                except Exception as e:
-                    logger.error(f"Error generating description: {e}")
-                    description = "Error generating description"
+            except Exception as e:
+                logger.error(f"Error generating description: {e}")
+                description = "Error generating description"
             
             # Create the response object
             response = {
@@ -426,7 +464,7 @@ class MetaLlamaIndexCore:
     
     def _enhance_question_with_table_guidance(self, question: str) -> str:
         """
-        Enhance the question with guidance about which tables to use based on the question type.
+        Enhance the question with general guidance about available tables.
         
         Args:
             question: The original natural language question
@@ -434,26 +472,19 @@ class MetaLlamaIndexCore:
         Returns:
             Enhanced question with table guidance
         """
-        question_lower = question.lower()
+        # Add DuckDB SQL dialect instruction
+        duckdb_instruction = "Use DuckDB SQL dialect for your query. "
         
-        # Time-based analysis questions
-        if any(term in question_lower for term in ['month', 'trend', 'over time', 'change', 'growth']):
-            return f"{question} Use the campaign_monthly_metrics table for time-based analysis."
+        # Provide general guidance about available tables
+        table_guidance = """
+        Available tables:
+        - campaign_monthly_metrics: Contains aggregated monthly metrics for the entire company (ROI, conversion rate, etc.). No dimensional data like audience or channels here.
+        - metrics_monthly_anomalies: Contains statistical anomalies in monthly metrics with severity scores.
+        - campaign_month_performance_rankings: Contains campaign-level performance metrics with dimensional data (audience, channel, etc.) and rankings.
+        """
         
-        # Anomaly detection questions
-        elif any(term in question_lower for term in ['anomaly', 'unusual', 'outlier', 'deviation', 'abnormal']):
-            return f"{question} Use the metrics_monthly_anomalies table to identify statistical anomalies."
-        
-        # Ranking and performance comparison questions
-        elif any(term in question_lower for term in ['rank', 'ranking', 'top', 'best', 'worst', 'compare', 'comparison', 'performance']):
-            return f"{question} Use the campaign_month_performance_rankings table for aggregating campaigns and their performance."
-        
-        # Campaign-level detailed questions
-        elif any(term in question_lower for term in ['campaign', 'specific', 'individual', 'detail']):
-            return f"{question} Use the stg_campaigns table for detailed campaign-level data."
-        
-        # Default - no specific guidance
-        return question
+        # Combine the original question with the guidance
+        return f"{duckdb_instruction}{question} {table_guidance}"
 
 
 def initialize_llamaindex(api_key: Optional[str] = None, model: Optional[str] = None, temperature: Optional[float] = None) -> MetaLlamaIndexCore:
