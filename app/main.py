@@ -12,6 +12,7 @@ Commands:
     python -m app.main dashboard  - Start the dashboard
     python -m app.main serve      - Start a simple web server
     python -m app.main vanna      - Start Vanna natural language to SQL CLI
+    python -m app.main llamaindex - Start LlamaIndex natural language to SQL CLI
     python -m app.main metadata   - Generate metadata for dbt models
     python -m app.main insights   - Generate AI-powered insights for social media data
 """
@@ -275,6 +276,142 @@ def start_vanna(command=None):
         logger.error("Vanna module not found. Install with 'pip install vanna'")
         return False
 
+
+def start_llamaindex(command=None, question=None, company=None):
+    """
+    Start the LlamaIndex natural language to SQL CLI.
+    
+    Args:
+        command: Optional command to run (train, ask, compare, view-training)
+        question: Optional question to ask (for ask and compare commands)
+        company: Optional company filter (for ask and compare commands)
+    """
+    logger.info(f"Starting LlamaIndex natural language to SQL CLI with command: {command or 'interactive'}...")
+    
+    if not check_environment():
+        return False
+    
+    try:
+        # Import the llamaindex_cli module
+        import sys
+        
+        # Save original sys.argv
+        original_argv = sys.argv.copy()
+        
+        # Set sys.argv to just the script name for the CLI
+        # This prevents passing the 'llamaindex' argument to the CLI
+        sys.argv = [sys.argv[0]]
+        
+        # Add the appropriate command and flags
+        if command == 'train':
+            logger.info("Running LlamaIndex training...")
+            sys.argv.append('train')
+        elif command == 'view-training':
+            logger.info("Viewing LlamaIndex training data...")
+            sys.argv.append('view-training')
+        elif command == 'ask':
+            if question:
+                logger.info(f"Asking LlamaIndex: {question}")
+                sys.argv.append('ask')
+                sys.argv.append(question)
+                if company:
+                    sys.argv.append('--company')
+                    sys.argv.append(company)
+            else:
+                logger.error("No question provided for 'ask' command")
+                return False
+        elif command == 'compare':
+            if question:
+                logger.info(f"Comparing LlamaIndex and Vanna: {question}")
+                sys.argv.append('compare')
+                sys.argv.append(question)
+                if company:
+                    sys.argv.append('--company')
+                    sys.argv.append(company)
+            else:
+                logger.error("No question provided for 'compare' command")
+                return False
+        else:
+            # Default to interactive ask mode
+            # We need to set up an interactive loop since llamaindex_cli doesn't have an interactive mode
+            logger.info("Starting LlamaIndex interactive query mode...")
+            from app.text_to_sql_adapter import initialize_text_to_sql, TextToSQLBackend
+            
+            # Initialize the text-to-SQL adapter with LlamaIndex backend
+            text_to_sql = initialize_text_to_sql(
+                backend=TextToSQLBackend.LLAMAINDEX
+            )
+            
+            print("\nLlamaIndex Text-to-SQL Interactive Mode")
+            print("Type 'exit' or 'quit' to exit")
+            print("Type 'switch' to switch between LlamaIndex and Vanna backends")
+            
+            current_backend = TextToSQLBackend.LLAMAINDEX
+            
+            while True:
+                try:
+                    # Get user input
+                    user_input = input("\nEnter your question (or exit/quit/switch): ")
+                    
+                    # Check for exit command
+                    if user_input.lower() in ['exit', 'quit']:
+                        break
+                    
+                    # Check for switch command
+                    if user_input.lower() == 'switch':
+                        if current_backend == TextToSQLBackend.LLAMAINDEX:
+                            current_backend = TextToSQLBackend.VANNA
+                            print("Switched to Vanna backend")
+                        else:
+                            current_backend = TextToSQLBackend.LLAMAINDEX
+                            print("Switched to LlamaIndex backend")
+                        continue
+                    
+                    # Get optional company filter
+                    company_filter = input("Enter company filter (or press Enter to skip): ")
+                    if not company_filter.strip():
+                        company_filter = None
+                    
+                    # Process the question
+                    from app.llamaindex_cli import ask_question, format_result
+                    result = ask_question(
+                        question=user_input,
+                        company=company_filter,
+                        backend=current_backend.value
+                    )
+                    
+                    # Format and print the result
+                    print(format_result(result))
+                    
+                except KeyboardInterrupt:
+                    print("\nExiting...")
+                    break
+                except Exception as e:
+                    print(f"Error: {e}")
+            
+            return True
+        
+        try:
+            # Import and run LlamaIndex CLI
+            from app.llamaindex_cli import main as run_llamaindex_cli
+            result = run_llamaindex_cli(sys.argv[1:])
+            success = result == 0
+            
+            if success:
+                logger.info(f"LlamaIndex command '{command or 'interactive'}' completed successfully")
+            else:
+                logger.error(f"LlamaIndex command '{command or 'interactive'}' failed")
+                
+        finally:
+            # Restore original sys.argv
+            sys.argv = original_argv
+            
+        return success
+    except ImportError as e:
+        logger.error(f"Error importing LlamaIndex modules: {e}")
+        logger.error("Make sure required packages are installed: pip install llama-index llama-index-llms-gemini llama-index-embeddings-gemini")
+        return False
+
 def generate_dbt_metadata(model_type=None, model_name=None, skip_existing=False, vanna_json=False):
     """
     Generate metadata for dbt models using LLM.
@@ -362,7 +499,7 @@ def main():
     
     # Parse command line arguments
     command = "check"  # Default command
-    subcommand = None  # For vanna subcommands
+    subcommand = None  # For vanna/llamaindex subcommands
     model_type = None  # For metadata subcommands
     model_name = None  # For metadata specific model
     skip_existing = False  # For metadata skip existing flag
@@ -373,12 +510,28 @@ def main():
     insight_type = None
     force_refresh = False
     
+    # For llamaindex command
+    question = None
+    company_filter = None
+    
     if len(sys.argv) > 1:
         command = sys.argv[1].lower()
         
         # Check for vanna subcommands
         if command == "vanna" and len(sys.argv) > 2:
             subcommand = sys.argv[2].lower()
+        
+        # Check for llamaindex subcommands
+        if command == "llamaindex" and len(sys.argv) > 2:
+            subcommand = sys.argv[2].lower()
+            
+            # Check for question and company filter for ask/compare commands
+            if subcommand in ["ask", "compare"] and len(sys.argv) > 3:
+                question = sys.argv[3]
+                
+                # Check for company filter
+                if len(sys.argv) > 5 and sys.argv[4] == "--company":
+                    company_filter = sys.argv[5]
         
         # Check for metadata subcommands
         if command == "metadata" and len(sys.argv) > 2:
@@ -438,16 +591,29 @@ def main():
         else:
             # Default to interactive mode
             start_vanna()
+    elif command == "llamaindex":
+        if subcommand == "train":
+            start_llamaindex(command="train")
+        elif subcommand == "view-training":
+            start_llamaindex(command="view-training")
+        elif subcommand == "ask":
+            start_llamaindex(command="ask", question=question, company=company_filter)
+        elif subcommand == "compare":
+            start_llamaindex(command="compare", question=question, company=company_filter)
+        else:
+            # Default to interactive mode
+            start_llamaindex()
     elif command == "metadata":
         generate_dbt_metadata(model_type=model_type, model_name=model_name, skip_existing=skip_existing, vanna_json=vanna_json)
     elif command == "insights":
         generate_insights(company_name=company_name, force_refresh=force_refresh)
     else:
         logger.error(f"Unknown command: {command}")
-        logger.info("Available commands: check, process, dbt, dashboard, serve, vanna, metadata, insights")
+        logger.info("Available commands: check, process, dbt, dashboard, serve, vanna, llamaindex, metadata, insights")
         logger.info("Vanna subcommands: vanna train, vanna query, vanna view-training")
+        logger.info("LlamaIndex subcommands: llamaindex train, llamaindex ask [question] [--company company], llamaindex compare [question] [--company company], llamaindex view-training")
         logger.info("Metadata subcommands: metadata [--skip-existing] [--vanna-json] [all|staging|marts] [model_name]")
-        logger.info("Insights subcommands: insights [company_name] [insight_type] [--force]")
+        logger.info("Insights subcommands: insights [company_name] [--force]")
     
     logger.info("Meta Demo application completed")
 

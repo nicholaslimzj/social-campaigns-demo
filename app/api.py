@@ -12,8 +12,8 @@ from flask import Flask, Blueprint, jsonify, request
 from flask_cors import CORS
 from typing import Dict, List, Any, Optional, Union
 
-# Import Vanna core functionality
-from app.vanna_core import initialize_vanna, VANNA_AVAILABLE, GEMINI_AVAILABLE
+# Import text-to-SQL adapter
+from app.text_to_sql_adapter import initialize_text_to_sql, TextToSQLBackend
 
 from app.api_utils import (
     get_companies, 
@@ -58,47 +58,49 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Global variables
-vanna_instance = None
+text_to_sql_instance = None
 app = None
 
 
 
 def init_app() -> Flask:
     """Initialize and return the Flask app with all routes configured."""
-    global vanna_instance, app
+    global text_to_sql_instance, app
     
     # Create a new Flask app instance
     app = Flask(__name__)
     CORS(app)  # Enable CORS for all routes
     
-    # Initialize Vanna using environment variables
-    if VANNA_AVAILABLE and GEMINI_AVAILABLE:
+    # Initialize text-to-SQL adapter
+    try:
+        # Get configuration from environment variables
+        api_key = os.environ.get("GOOGLE_API_KEY")
+        model = os.environ.get("GEMINI_MODEL", "gemini-1.5-pro")
+        temp_str = os.environ.get("GEMINI_TEMPERATURE", "0.2")
+        
+        # Get the preferred backend from environment variable
+        backend_name = os.environ.get("TEXT_TO_SQL_BACKEND", "llamaindex")
+        
+        # Convert temperature to float
         try:
-            # Get configuration from environment variables
-            api_key = os.environ.get("GOOGLE_API_KEY")
-            model = os.environ.get("VANNA_MODEL", "gemini-2.5-pro-preview-03-25")
-            temp_str = os.environ.get("VANNA_TEMPERATURE", "0.2")
-            
-            # Convert temperature to float
-            try:
-                temperature = float(temp_str)
-            except ValueError:
-                logger.warning(f"Invalid temperature value '{temp_str}', using default 0.2")
-                temperature = 0.2
-            
-            if not api_key:
-                logger.error("No Google API key found in environment variables. Vanna cannot be initialized.")
-            else:
-                # Initialize Vanna with explicit parameters
-                vanna_instance = initialize_vanna(
-                    api_key=api_key,
-                    model=model,
-                    temperature=temperature,
-                    train=False
-                )
-                logger.info(f"Vanna initialized successfully with model={model}, temperature={temperature}")
-        except Exception as e:
-            logger.error(f"Error initializing Vanna: {str(e)}")
+            temperature = float(temp_str)
+        except ValueError:
+            logger.warning(f"Invalid temperature value '{temp_str}', using default 0.2")
+            temperature = 0.2
+        
+        if not api_key:
+            logger.error("No Google API key found in environment variables. Text-to-SQL cannot be initialized.")
+        else:
+            # Initialize text-to-SQL adapter with explicit parameters
+            text_to_sql_instance = initialize_text_to_sql(
+                backend=backend_name,
+                api_key=api_key,
+                model=model,
+                temperature=temperature
+            )
+            logger.info(f"Text-to-SQL adapter initialized successfully with backend={backend_name}, model={model}, temperature={temperature}")
+    except Exception as e:
+        logger.error(f"Error initializing text-to-SQL adapter: {str(e)}")
     
     # Register routes
     register_routes(app)
@@ -129,9 +131,8 @@ def register_routes(app: Flask) -> None:
         """Health check endpoint."""
         return jsonify({
             "status": "ok",
-            "vanna_available": VANNA_AVAILABLE,
-            "gemini_available": GEMINI_AVAILABLE,
-            "vanna_initialized": vanna_instance is not None
+            "text_to_sql_available": text_to_sql_instance is not None,
+            "backend": text_to_sql_instance.backend_name if text_to_sql_instance else None
         })
     
     @app.route('/api/ask', methods=['POST'])
@@ -145,10 +146,10 @@ def register_routes(app: Flask) -> None:
             "company": "Cyber Circuit"  # Optional filter
         }
         """
-        # Check if Vanna is initialized
-        if not vanna_instance:
+        # Check if text-to-SQL adapter is initialized
+        if not text_to_sql_instance:
             return jsonify({
-                "error": "Vanna is not initialized. Make sure the API key is provided."
+                "error": "Text-to-SQL adapter is not initialized. Make sure the API key is provided."
             }), 500
         
         # Get request data
@@ -166,8 +167,8 @@ def register_routes(app: Flask) -> None:
             question = f"{question} for {company_filter}"
         
         try:
-            # Process the question using Vanna
-            result = vanna_instance.ask(question)
+            # Process the question using the text-to-SQL adapter
+            result = text_to_sql_instance.ask(question)
             
             # Check for errors in the result
             if 'error' in result:

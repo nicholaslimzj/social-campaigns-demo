@@ -1,44 +1,49 @@
 # Core data processing libraries
-pandas~=2.2.0
-pyarrow~=19.0.0
-duckdb~=1.2.0
-fastparquet==2024.11.0
+pandas>=2.2.0
+pyarrow>=19.0.0
+duckdb>=1.2.0
+fastparquet>=2024.11.0
 numpy>=1.22.4
 
 # Visualization libraries
-matplotlib~=3.10.0
-seaborn~=0.13.0
-plotly~=6.0.0
-dash~=3.0.0
-dash-bootstrap-components~=2.0.0
+matplotlib>=3.10.0
+seaborn>=0.13.0
+plotly>=6.0.0
+dash>=3.0.0
+dash-bootstrap-components>=2.0.0
 
 # Machine learning
-scikit-learn~=1.6.0
+scikit-learn>=1.6.0
 
 # Utilities
-python-dotenv~=1.1.0
-tqdm~=4.67.0
+python-dotenv>=1.1.0
+tqdm>=4.67.0
 
 # Development and notebook support
-ipykernel~=6.29.0
-jupyterlab~=4.4.0
+ipykernel>=6.29.0
+jupyterlab>=4.4.0
 
 # Data transformation
-dbt-duckdb~=1.9.0
+dbt-duckdb>=1.9.0
 
-# Vanna.ai for natural language to SQL
-vanna[chromadb,gemini,duckdb]~=0.7.0
-vertexai~=1.71.0
-sentence_transformers~=2.7.0
+# LlamaIndex for improved natural language to SQL
+llama-index>=0.10.0
+# Google Generative AI integration for LlamaIndex
+llama-index-llms-google-genai>=0.1.0
+# Explicitly include google-generativeai for direct imports
+google-generativeai>=0.3.0
+# Only keep SQLAlchemy for database connection
+sqlalchemy>=2.0.0
+duckdb-engine>=0.9.0
 
 # LangChain for insights generation
-langchain~=0.1.0
+langchain>=0.1.0
 langchain-google-genai>=0.0.3
 
 # API server
-flask~=3.0.0
-flask-cors~=5.0.0
-gunicorn~=23.0.0
+flask>=3.0.0
+flask-cors>=5.0.0
+gunicorn>=23.0.0
 
 # Core requirements only
 # Development-specific requirements are in requirements-dev.txt
