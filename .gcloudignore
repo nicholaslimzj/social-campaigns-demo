@@ -53,3 +53,4 @@ docker-compose.yml
 README.md
 .vercel
 /api_test_results
+.vscode
