@@ -8,8 +8,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first to leverage Docker cache
+RUN pip install uv
 COPY requirements.txt /requirements.txt
-RUN pip install --no-cache-dir -r /requirements.txt gunicorn
+RUN uv pip install --system --no-cache-dir -r /requirements.txt gunicorn
 
 # Copy application code to match the root filesystem structure from docker-compose
 COPY app/ /app/

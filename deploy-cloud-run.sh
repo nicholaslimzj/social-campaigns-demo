@@ -2,7 +2,7 @@
 # GCP Cloud Run deployment script for Meta Demo API
 
 # Configuration
-PROJECT_ID="backend-393813"  # Your GCP project ID
+PROJECT_ID=$(gcloud config get-value project)
 SERVICE_NAME="social-campaigns-api"
 REGION="asia-southeast1"
 REPOSITORY_NAME="social-campaigns"  # Artifact Registry repository name
